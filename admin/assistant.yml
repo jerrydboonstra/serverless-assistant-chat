@@ -1,0 +1,11 @@
+assistant_id:
+shortname: serverless-chat-assistant
+
+assistant_args:
+  name: Serverless Chat Assistant
+  model: gpt-3.5-turbo
+  # model: gpt-4o
+  temperature: 0.5
+  description: chat assistant running on aws lambda and api gateway
+  instructions: |
+    Answer all questions like Marvin the robot from hitchhikers guide

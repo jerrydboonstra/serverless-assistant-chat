@@ -1,103 +1,140 @@
-# Serverless Bedrock chat
-A simple serverless web application demonstrating the use of Bedrock to interact with an LLM via a simple web chat interface. Both backend and
-frontend are implemented with TypeScript.
+# Serverless Assistant Chat
+
+A simple serverless web application demonstrating the use of OpenAI Assistant API to interact with an LLM via a simple web chat interface. 
+Both backend and frontend are implemented with TypeScript.
 
 The architecture of the application is illustrated below:-
 
 ![Architecture](images/architecture.png)
+
+## Environment
+
+Set these environment variables with your own values. Bucket names are globally unique.
+
+I use a `.env` file with `direnv`. Otherwise prefix these with "export".
+
+```sh
+AWS_REGION=us-east-2
+STACK_NAME=serverless-assistant-chat
+BE_DEPLOYMENT_BUCKET=serverless-assistant-chat
+FE_DEPLOYMENT_BUCKET=serverless-assistant-chat-fe
+USER_EMAIL=you@example.com
+OPENAI_API_KEY=yourkey
+ASSISTANT_ID=
+
+REGION=                     # Your AWS region
+USER_POOL_ID=               # `CognitoUserPoolID` - the user pool id
+USER_POOL_WEB_CLIENT_ID=    # `CognitoAppClientID` - the app client id
+API_ENDPOINT=               # `ServiceEndpointWebsocket` - the address of the API Gateway WebSocket
+DOMAIN_NAME=                # `DomainName` - the domain of the CloudFront distribution
+```
+
+## Remote Assistant
+
+Create an Assistant instance at OpenAI using our script.
+
+This is in python, create a venv 3.10+ and install the [requirements.txt](requirements.txt).
+
+```sh
+python ./admin/create_assistant.py admin/assistant.yml
+```
+
+Upon success you'll get an assistant ID.  You'll need this.  
+
+- Update the [`assistant.yml`](admin/assistant.yml) file and give the `AssistantId` field this value.
+This allows you to update the prompt and update the existing assistant instance.
+- add `ASSISTANT_ID=yourvalue` to your environment (.env)
 
 ## Backend
 Before creating the insfrastructure via the Cloud Formation template, build the backend
 Lambda code and place it in S3 for the Lambda deployment by following the steps below
 
 ### Create the bucket to hold the built Lambda code
-First we create an S3 bucket to hold the deployable Lambda code (remember S3 bucket names are globally unique). To create this bucket, run the following command, where `BE_DEPLOYMENT_BUCKET` is a globally unique name for the bucket.
+First we create an S3 bucket to hold the deployable Lambda code (remember S3 bucket names are globally unique). 
 
-```
-env BE_DEPLOYMENT_BUCKET=<bucket_name> ./backend/createDeploymentBucket.sh
+```sh
+./admin/createDeploymentBucket.sh
 ```
 
 ### Build
+
 We then transpile and webpack the backend Typescript code by running the following command
-```
+
+```sh
 make build-backend
 ```
 
 ### Deploy
+
 Finally we upload the built artifact by running the following command
-```
- env BE_DEPLOYMENT_BUCKET=<bucket_name> make deploy-backend
+
+```sh
+make deploy-backend
 ```
 
 ## Infrastructure
+
 Once we have the Lambda artifact built and ready to be deployed, we can deploy the supplied Cloud Formation template that will create all the required infrastructure (Lambda, API Gateway, S3 bucket, CloudFront distro, Cognito items etc.)
-
-The CloudFormation template can be found in the project root directory and requires 3 parameters to be specified when deploying, as shown in the following screenshot
-
-![CloudFormation](images/cfnScreenshot.png)
-
-- BucketName - a globally unique name for an S3 bucket to host the static web application in
-- DeploymentBucketName - the name of the S3 bucket that was created previously to hold the Lambda code
-- UserEmail - a valid email address that will be used to create a Cognito user for the application, and send a confirmation mail to
-
-Set values for these as environment variables, which will be used during CF preparation and deployment eg.
-
-```sh
-AWS_REGION=us-east-2
-STACK_NAME=example-serverless-bedrock-chat
-BE_DEPLOYMENT_BUCKET=example-serverless-bedrock-chat
-FE_DEPLOYMENT_BUCKET=example-serverless-bedrock-chat-fe
-USER_EMAIL=you@example.com
-```
 
 ### Deployment
 
 - Install AWS SAM CLI (if not already installed):
     - Follow the [AWS SAM installation guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
-- Prepare the CF deployment:
+- Prepare the CloudFormation deployment:
     - `make prepare-cf`
-- Deploy the CF deployment:
+- Deploy the CloudFormation deployment:
     - `make deploy-cf`
 
 ### Cloudformation outputs
-When the CloudFormation stack has successfully completed, navigate to the outputs and make a note of the following parameters that you will need to update in the frontend code before you build and deploy it.
+When the CloudFormation stack has successfully completed, in the outputs make note of the following parameters that you will need to add to the `.env` file before you build and deploy the frontend code.
 
-- CognitoAppClientID - the app client id
-- CognitoUserPoolID - the user pool id
-- DomainName - the domain of the CloudFront distribution
-- ServiceEndpointWebsocket - the addrewss of the API Gateway WebSocket
+`.env` portion repeated here:
+
+```sh
+REGION=                     # Your AWS region
+USER_POOL_ID=               # `CognitoUserPoolID` - the user pool id
+USER_POOL_WEB_CLIENT_ID=    # `CognitoAppClientID` - the app client id
+API_ENDPOINT=               # `ServiceEndpointWebsocket` - the addrewss of the API Gateway WebSocket
+DOMAIN_NAME=                # `DomainName` - the domain of the CloudFront distribution
+```
 
 ## Frontend
-
-### Configure
-Before building the frontend code, update the file `frontend/src/App.tsx` with the outputs from the CloudFormation stack in the previous step.
-
-```
-const USER_POOL_ID = ''; // Use CognitoUserPoolID output
-const USER_POOL_WEB_CLIENT_ID = ''; // Use CognitoAppClientID output
-const API_ENDPOINT = ''; // Use ServiceEndpointWebsocket output
-```
-
-
-
 
 ### Build
 To build the frontend code, run the following command from the project root directory.
 
-```
+```sh
 make build-frontend
 ```
 
 ### Deploy
 To deploy the frontend, run the following command from the project root directory. The `FE_DEPLOYMENT_BUCKET` is the name of the bucket provided when deploying the CloudFormation template in the previous step.
 
-```
- env FE_DEPLOYMENT_BUCKET=<bucket_name> make deploy-frontend
+```sh
+make deploy-frontend
 ```
 
 ### Use
 Check your email for a welcome email from Cognito with a temporary password.
 
-Then you can navidate to the CloudFront domain that was created by the CloudFormation stack, enter your email address and password and start to use the application.
+Then you can navidate to the CloudFront domain that was created by the CloudFormation stack (`DOMAIN_NAME`), enter your email address and password and start to use the application.
 
 ![Screengrab](images/screengrab.gif)
+
+## Making changes after stack deployment
+
+### Frontend
+
+Deploying front-end changes take effect immediately.
+
+```sh
+make deploy-frontend
+```
+
+### Backend
+
+Deploying backend-end changes require a stack update to take effect.
+
+```sh
+make deploy-cf
+```

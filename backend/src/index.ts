@@ -1,50 +1,54 @@
 import { Handler } from 'aws-lambda';
-import { Bedrock } from 'langchain/llms/bedrock';
-import { BaseCallbackHandler } from 'langchain/callbacks';
-import { BufferMemory } from 'langchain/memory';
-import { ConversationChain } from 'langchain/chains';
-import { DynamoDBChatMessageHistory } from '@langchain/community/stores/message/dynamodb';
+import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
 import { decode, verify } from 'jsonwebtoken';
 import { promisify, TextEncoder } from 'util';
-import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
 import jwksRsa from 'jwks-rsa';
+import OpenAI from 'openai';
+import { ThreadCreateParams } from 'openai/resources/beta/threads/threads';
+import { MessageCreateParams, TextDelta } from 'openai/resources/beta/threads/messages';
 
 const textEncoder = new TextEncoder();
 
-const JWKS_URI = process.env.JWKS_URI ? process.env.JWKS_URI : '';
+const JWKS_URI = process.env.JWKS_URI || '';
 const API_GW_ENDPOINT = process.env.API_GW_ENDPOINT;
-const ISSUER = process.env.ISSUER; 
-const AUDIENCE = process.env.AUDIENCE ? process.env.AUDIENCE : '';
+const ISSUER = process.env.ISSUER;
+const AUDIENCE = process.env.AUDIENCE || '';
+const ASSISTANT_ID = process.env.ASSISTANT_ID || '';
+
+if (!JWKS_URI || !API_GW_ENDPOINT || !ISSUER || !AUDIENCE || !ASSISTANT_ID) {
+  throw new Error('One or more required environment variables are missing.');
+}
 
 const apiGwManApiClient = new ApiGatewayManagementApiClient({
   region: process.env.AWS_REGION,
   endpoint: API_GW_ENDPOINT,
 });
 
+const dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const openai = new OpenAI();
+
 const client = jwksRsa({
   cache: true,
   rateLimit: true,
-  jwksUri: JWKS_URI
+  jwksUri: JWKS_URI,
 });
 
-export const getSigningKey = promisify(client.getSigningKey);
+const getSigningKey = promisify(client.getSigningKey);
 
-let connectionId: string;
-let prompt: string;
-
-async function verifyToken(token: string, publicKey: string, audience: string) {
-  console.log(`Verify token`);
-  await verify(token, publicKey, {
-    audience: AUDIENCE,
-    issuer: ISSUER,
-  });
-  console.log(`Verified the token for ${audience}`);
+async function verifyToken(token: string, publicKey: string, audience: string): Promise<void> {
+  try {
+    await verify(token, publicKey, {
+      audience,
+      issuer: ISSUER,
+    });
+  } catch (err) {
+    throw new Error('Token verification failed');
+  }
 }
 
-function decodeToken(token: string) {
-  console.log(`Decode token`);
+function decodeToken(token: string): any {
   const decoded = decode(token, { complete: true });
-  console.log(`Decoded token ${JSON.stringify(decoded)}`);
   if (!decoded || !decoded.header || !decoded.header.kid) {
     throw new Error('Invalid token');
   }
@@ -53,114 +57,90 @@ function decodeToken(token: string) {
 
 async function authorize(token: string): Promise<boolean> {
   try {
-    console.log(token);
     const decodedToken = decodeToken(token);
     const signingKey = await getSigningKey(decodedToken.header.kid);
-
     if (signingKey) {
       const publicKey = signingKey.getPublicKey();
-      let verified = false;
-      const audience = AUDIENCE;
-
-      try {
-        await verifyToken(token, publicKey, audience);
-        console.log(`Verified the token for ${audience}`);
-        verified = true;
-      } catch (err) {
-        console.error('Token not verified', err);
-        return false;
-      }
-
-      if (verified) {
-        return true;
-      }
+      await verifyToken(token, publicKey, AUDIENCE);
+      return true;
     }
   } catch (err) {
-    console.error('Token not verified', err);
-    return false;
+    console.error('Authorization failed', err);
   }
   return false;
 }
 
-export const handler: Handler = async (event: any, context: any) => {
+async function getThreadId(userId: string): Promise<string | null> {
+  const command = new GetItemCommand({
+    TableName: 'AssistantThreadTable',
+    Key: {
+      userId: { S: userId },
+    },
+  });
+
+  const response = await dynamoDbClient.send(command);
+  return response.Item?.threadId?.S || null;
+}
+
+async function saveThreadId(userId: string, threadId: string): Promise<void> {
+  const command = new PutItemCommand({
+    TableName: 'AssistantThreadTable',
+    Item: {
+      userId: { S: userId },
+      threadId: { S: threadId },
+    },
+  });
+
+  await dynamoDbClient.send(command);
+}
+
+const handler: Handler = async (event, context) => {
   console.log('EVENT: \n' + JSON.stringify(event, null, 2));
-  connectionId = event.requestContext.connectionId;
+  const connectionId = event.requestContext.connectionId;
   const routeKey = event.requestContext.routeKey;
 
-  const memory = new BufferMemory({
-    chatHistory: new DynamoDBChatMessageHistory({
-      tableName: `conversationhistory`,
-      partitionKey: 'id',
-      sessionId: connectionId,
-    }),
-  });
+  try {
+    switch (routeKey) {
+      case '$connect':
+        console.log('$connect');
+        break;
+      case '$disconnect':
+        console.log('$disconnect');
+        break;
+      case 'ask': {
+        console.log('ask');
+        const requestData = JSON.parse(event.body);
+        const token = requestData.token;
+        const isAuthorized = await authorize(token);
+        if (!isAuthorized) {
+          console.log('Not Authorized');
+          return {
+            statusCode: 401,
+            body: JSON.stringify({ message: 'Unauthorized' }),
+          };
+        }
 
-  switch (routeKey) {
-    case '$connect': {
-      console.log('$connect');
-      break;
-    }
-    case '$disconnect': {
-      console.log('$disconnect');
-      break;
-    }
-    case 'ask': {
-      console.log('ask');
-      const requestData = JSON.parse(event.body);
-      const token = requestData.token;
-      const isAuthorized = await authorize(token);
-      if (!isAuthorized) {
-        console.log('Not Authorized');
-        return;
-      } else {
         console.log('Authorized');
-        prompt = requestData.data;
+        const prompt = requestData.data;
+        const decodedToken = decodeToken(token);
+        const userId = decodedToken.payload['sub'];
+        console.log('userId', { userId });
+
+        let result = await main(userId, prompt, connectionId);
+        console.log('Run Result' + result);
+        break;
       }
-      break;
+      default:
+        console.log('default');
+        break;
     }
-    default: {
-      console.log('default');
-      break;
-    }
+  } catch (error) {
+    console.error('Error handling request:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: 'Internal Server Error' }),
+    };
   }
-
-  console.log(`Connection id ${connectionId}`);
-  console.log(`Route key ${routeKey}`);
-
-  const callbackHandler = BaseCallbackHandler.fromMethods({
-    async handleLLMNewToken(token: string) {
-      console.log('token', { token });
-
-      const postToConnectionCommandResp = await apiGwManApiClient.send(
-        new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: textEncoder.encode(token),
-        }),
-      );
-      console.log(`postToConnectionCommand resp => ${JSON.stringify(postToConnectionCommandResp)}`);
-    },
-    async handleLLMEnd() {
-      const postToConnectionCommandResp = await apiGwManApiClient.send(
-        new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: textEncoder.encode('End'),
-        }),
-      );
-      console.log(`postToConnectionCommand resp => ${JSON.stringify(postToConnectionCommandResp)}`);
-    },
-  });
-
-  const model = new Bedrock({
-    model: 'anthropic.claude-v2',
-    region: 'us-east-1',
-    streaming: true,
-    callbacks: [callbackHandler],
-    modelKwargs: { max_tokens_to_sample: 4000, temperature: 0.1 },
-  });
-
-  const chain = new ConversationChain({ llm: model, memory });
-  const res = await chain.predict({input: `\n\nHuman: ${prompt} \n\nAssistant:`});
-  console.log(res);
 
   return {
     statusCode: 200,
@@ -170,3 +150,79 @@ export const handler: Handler = async (event: any, context: any) => {
     body: '{}',
   };
 };
+
+async function findOrCreateThread(userId: string, prompt: string): Promise<string> {
+  let threadId = await getThreadId(userId);
+
+  if (!threadId) {
+    const messages: ThreadCreateParams.Message[] = [{ role: 'user', content: prompt }];
+    const thread = await openai.beta.threads.create({
+      messages: messages.length > 0 ? messages : [{ role: 'user', content: 'hello.' }],
+    });
+    threadId = thread.id;
+    await saveThreadId(userId, threadId);
+  } else {
+    const messages: MessageCreateParams = { role: 'user', content: prompt };
+    await openai.beta.threads.messages.create(threadId, messages);
+  }
+  return threadId;
+}
+
+interface ICallbackHandler {
+  handleLLMNewToken(token: string): Promise<void>;
+  handleLLMEnd(): Promise<void>;
+}
+
+async function main(userId: string, prompt: string, connectionId: string) {
+  const callbackHandler: ICallbackHandler = {
+    async handleLLMNewToken(token: string) {
+  
+      const postToConnectionCommandResp = await apiGwManApiClient.send(
+        new PostToConnectionCommand({
+          ConnectionId: connectionId,
+          Data: textEncoder.encode(token),
+        }),
+      );
+      console.log('stream token', { token });
+      console.log(`token postToConnectionCommand resp => ${JSON.stringify(postToConnectionCommandResp)}`);
+    },
+    async handleLLMEnd() {
+      const postToConnectionCommandResp = await apiGwManApiClient.send(
+        new PostToConnectionCommand({
+          ConnectionId: connectionId,
+          Data: textEncoder.encode('End'),
+        }),
+      );
+      console.log('stream end');
+      console.log(`end postToConnectionCommand resp => ${JSON.stringify(postToConnectionCommandResp)}`);
+    },
+  };
+
+  const threadId = await findOrCreateThread(userId, prompt);
+  console.log(`Thread ID : ${threadId}`);
+  console.log(`Assistant ID : ${ASSISTANT_ID}`);
+
+  const run = openai.beta.threads.runs.stream(threadId, { assistant_id: ASSISTANT_ID })
+    .on('connect', () => console.log('connect'))
+    .on('run', (run) => console.log('run', { run }))
+    .on('abort', () => { console.log('abort'); })
+    .on('textDelta', (delta: TextDelta, snapshot) => {
+      if (delta.value !== undefined) {
+        callbackHandler.handleLLMNewToken(delta.value);
+      }
+    })
+    .on('end', () => {
+      callbackHandler.handleLLMEnd();
+    })
+    .on('event', (event) => console.log(event))
+    // .on('messageDelta', async (delta: MessageDelta, snapshot) => {
+    //   console.log('messageDelta', { snapshot })
+    // })
+    ;
+
+  console.log('Waiting for Run Result...');
+  const result = await run.finalRun();
+  return result
+}
+
+export { handler };

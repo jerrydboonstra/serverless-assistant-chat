@@ -1,0 +1,16 @@
+{
+    "requestContext": {
+      "routeKey": "$connect",
+      "messageDirection": "IN",
+      "eventType": "CONNECT",
+      "extendedRequestId": "request-id",
+      "requestTime": "timestamp",
+      "connectionId": "connection-id",
+      "connectedAt": 1603758472799,
+      "domainName": "example.com",
+      "stage": "dev"
+    },
+    "body": "",
+    "isBase64Encoded": false
+  }
+  

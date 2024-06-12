@@ -1,5 +1,5 @@
 {
-    "name": "API",
+    "name": "serverless-assistant-chat-backend",
     "version": "1.0.0",
     "devDependencies": {
         "@aws-crypto/sha256-js": "^5.2.0",
@@ -26,6 +26,7 @@
         "@langchain/community": "^0.0.17",
         "jsonwebtoken": "^9.0.2",
         "jwks-rsa": "^3.1.0",
-        "langchain": "^0.0.212"
+        "langchain": "^0.0.212",
+        "openai": "^4.47.3"
     }
 }

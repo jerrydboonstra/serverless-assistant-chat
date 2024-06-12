@@ -11,12 +11,21 @@ Parameters:
   DeploymentBucketName:
     Type: String
     Description: Name of the bucket holding your API Lambda zip file
+  AssistantId:
+    Type: String
+    Description: id of the openai assistant
+  OpenAiApiKey:
+    Type: String
+    Description: api key for openai
+  BuildTimestamp:
+    Type: String
+    Description: build time timestamp for the lambda zip file
  
 Resources:
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: example-serverless-bedrock-chat-user-pool
+      UserPoolName: serverless-assistant-chat-user-pool
       UsernameConfiguration:
         CaseSensitive: false
       AdminCreateUserConfig:
@@ -152,7 +161,7 @@ Resources:
   APILogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
-      LogGroupName: !Sub 'example-serverless-bedrock-chat'
+      LogGroupName: !Sub '/aws/lambda/api'
   IamRoleLambdaExecution:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -197,19 +206,35 @@ Resources:
                   - 'dynamodb:*'
                 Resource:
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/conversationhistory
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:*'
+                Resource:
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/AssistantThreadTable
       Path: /
       RoleName: !Join 
         - '-'
         - - api
           - !Ref 'AWS::Region'
           - lambdaRole
+  
+  OpenAILayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs18.x
+      Content:
+        S3Bucket: !Sub '${DeploymentBucketName}'
+        S3Key: openai-layer.zip
+
   APILambdaFunction:
     Type: 'AWS::Lambda::Function'
     Properties:
       Code:
         S3Bucket: !Sub '${DeploymentBucketName}'
-        S3Key: >-
-          api.zip
+        S3Key: !Sub 'api-${BuildTimestamp}.zip'
+      Layers:
+        - !Ref OpenAILayer
       Handler: src/index.handler
       Runtime: nodejs18.x
       FunctionName: api
@@ -233,6 +258,11 @@ Resources:
               - .
               - !Ref 'AWS::URLSuffix'
               - /dev
+          ASSISTANT_ID: !Ref AssistantId
+          OPENAI_API_KEY: !Ref OpenAiApiKey
+          REGION: !Ref AWS::Region
+          USER_POOL_ID: !GetAtt CognitoUserPool.Arn
+          USER_POOL_WEB_CLIENT_ID: !Ref ClientAppClient
       Role: !GetAtt 
         - IamRoleLambdaExecution
         - Arn
@@ -242,7 +272,7 @@ Resources:
   WebsocketsApi:
       Type: 'AWS::ApiGatewayV2::Api'
       Properties:
-        Name: example-bedrock-chatbot-websocket-api
+        Name: assistant-chatbot-websocket-api
         RouteSelectionExpression: $request.body.action
         ProtocolType: WEBSOCKET
   ApplicationWebsocketsIntegration:
@@ -340,6 +370,22 @@ Resources:
           BillingMode: PAY_PER_REQUEST
           KeySchema:
             - AttributeName: id
+              KeyType: HASH
+          SSESpecification:
+            SSEEnabled: true
+          TimeToLiveSpecification:
+            AttributeName: ttl
+            Enabled: true
+  AssistantThreadTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: AssistantThreadTable
+          AttributeDefinitions:
+            - AttributeName: userId
+              AttributeType: S
+          BillingMode: PAY_PER_REQUEST
+          KeySchema:
+            - AttributeName: userId
               KeyType: HASH
           SSESpecification:
             SSEEnabled: true

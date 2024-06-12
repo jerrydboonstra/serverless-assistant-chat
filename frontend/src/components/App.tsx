@@ -8,10 +8,15 @@ import './App.css';
 import lens from './assets/lens.png';
 import spinner from './assets/spinner.gif';
 
-const REGION = 'us-east-1';
-const USER_POOL_ID = '';
-const USER_POOL_WEB_CLIENT_ID = '';
-const API_ENDPOINT = '';
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
+
+const REGION = process.env.REGION || '';
+const USER_POOL_ID = process.env.USER_POOL_ID || '';
+const USER_POOL_WEB_CLIENT_ID = process.env.USER_POOL_WEB_CLIENT_ID || '';
+const API_ENDPOINT = process.env.API_ENDPOINT || '';
+
 
 Amplify.configure({
   Auth: {
@@ -58,7 +63,7 @@ function App() {
     });
   };
 
-  const [prompt, updatePrompt] = useState(undefined);
+  const [prompt, updatePrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState('');
 
@@ -70,9 +75,6 @@ function App() {
             type="text"
             className="spotlight__input"
             placeholder="Ask me anything..."
-            style={{
-              backgroundImage: `url(${lens})`,
-            }}
             disabled={loading}
             style={{
               backgroundImage: loading ? `url(${spinner})` : `url(${lens})`,

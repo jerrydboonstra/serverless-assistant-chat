@@ -1,4 +1,6 @@
 const HtmlWebPackPlugin = require('html-webpack-plugin');
+const Dotenv = require('dotenv-webpack');
+const path = require('path');
 
 const htmlPlugin = new HtmlWebPackPlugin({
   template: './index.html',
@@ -28,5 +30,5 @@ module.exports = {
       { test: /\.(gif)$/, loader: 'file-loader' }
     ]
   },
-  plugins: [htmlPlugin]
+  plugins: [htmlPlugin, new Dotenv({ path: '../.env' })]
 };

@@ -6,3 +6,7 @@ www
 .env*
 .nvmrc
 packaged-template.yml
+.venv/
+.vscode/
+openai-layer.zip
+admin/my_assistant.yml
