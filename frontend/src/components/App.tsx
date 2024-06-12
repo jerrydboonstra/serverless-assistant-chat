@@ -8,10 +8,6 @@ import './App.css';
 import lens from './assets/lens.png';
 import spinner from './assets/spinner.gif';
 
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config();
-}
-
 const REGION = process.env.REGION || '';
 const USER_POOL_ID = process.env.USER_POOL_ID || '';
 const USER_POOL_WEB_CLIENT_ID = process.env.USER_POOL_WEB_CLIENT_ID || '';
