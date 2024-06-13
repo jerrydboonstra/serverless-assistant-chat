@@ -1,11 +1,12 @@
 # Serverless Assistant Chat
 
-A simple serverless web application demonstrating the use of OpenAI Assistant API to interact with an LLM via a simple web chat interface. 
+A simple web application demonstrating the use of AWS Lambda serverless with stateful `OpenAI Assistant API v2` LLM to interact with via a simple web chat interface. 
+
 Both backend and frontend are implemented with TypeScript.
 
 The architecture of the application is illustrated below:-
 
-![Architecture](images/architecture.png)
+![Architecture](images/architecture2.png)
 
 ## Environment
 
@@ -31,11 +32,18 @@ API_ENDPOINT=               # `ServiceEndpointWebsocket` - the address of the AP
 DOMAIN_NAME=                # `DomainName` - the domain of the CloudFront distribution
 ```
 
-## Remote Assistant
+## Create Assistant Instance
 
-Create an Assistant instance at OpenAI using our script.
+### Roll your own
+Using the same account as your `OPENAI_API_KEY` you can roll your own and use the [OpenAI Assistant API v2](https://platform.openai.com/docs/api-reference/chat/create) to create an assistant instance.
 
-This is in python, create a venv 3.10+ and install the [requirements.txt](requirements.txt).
+
+### Python script
+Or, create an Assistant instance using our python script.
+
+Create a Python 3.10+ venv and install the [requirements.txt](requirements.txt).
+
+Then you can update the `instructions` field and deploy it.
 
 ```sh
 python ./admin/create_assistant.py admin/assistant.yml
