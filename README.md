@@ -41,7 +41,7 @@ Using the same account as your `OPENAI_API_KEY` you can roll your own and use th
 ### Python script
 Or, create an Assistant instance using our python script.
 
-Create a Python 3.10+ venv and install the [requirements.txt](requirements.txt).
+Create a Python 3.10+ venv and install the [requirements.txt](admin/requirements.txt).
 
 Then you can update the `instructions` field and deploy it.
 

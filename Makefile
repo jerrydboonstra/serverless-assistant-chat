@@ -1,5 +1,5 @@
 install:
-	pip install -r requirements.txt
+	pip install -r admin/requirements.txt
 
 create-bucket:
 	bash ./admin/createDeploymentBucket.sh
