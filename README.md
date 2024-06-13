@@ -14,6 +14,7 @@ Set these environment variables with your own values. Bucket names are globally 
 I use a `.env` file with `direnv`. Otherwise prefix these with "export".
 
 ```sh
+# BACKEND
 AWS_REGION=us-east-2
 STACK_NAME=serverless-assistant-chat
 BE_DEPLOYMENT_BUCKET=serverless-assistant-chat
@@ -22,6 +23,7 @@ USER_EMAIL=you@example.com
 OPENAI_API_KEY=yourkey
 ASSISTANT_ID=
 
+# FRONTEND
 REGION=                     # Your AWS region
 USER_POOL_ID=               # `CognitoUserPoolID` - the user pool id
 USER_POOL_WEB_CLIENT_ID=    # `CognitoAppClientID` - the app client id
@@ -56,7 +58,7 @@ First we create an S3 bucket to hold the deployable Lambda code (remember S3 buc
 ./admin/createDeploymentBucket.sh
 ```
 
-### Build
+### Build Backend
 
 We then transpile and webpack the backend Typescript code by running the following command
 
@@ -64,12 +66,29 @@ We then transpile and webpack the backend Typescript code by running the followi
 make build-backend
 ```
 
-### Deploy
+### Deploy Backend
 
 Finally we upload the built artifact by running the following command
 
 ```sh
 make deploy-backend
+```
+
+### Build Backend Lambda Layer
+
+We need to give our backend access to the OpenAI API.  
+We do this by creating a Lambda layer that contains the OpenAI Python SDK and dependencies.
+
+```sh
+make prepare-layer
+```
+
+### Deploy Backend Lambda Layer
+
+We have to deploy our Lambda layer to S3.
+
+```sh
+make create-layer
 ```
 
 ## Infrastructure
@@ -88,15 +107,9 @@ Once we have the Lambda artifact built and ready to be deployed, we can deploy t
 ### Cloudformation outputs
 When the CloudFormation stack has successfully completed, in the outputs make note of the following parameters that you will need to add to the `.env` file before you build and deploy the frontend code.
 
-`.env` portion repeated here:
+Update the `.env` file with the following vars:
 
-```sh
-REGION=                     # Your AWS region
-USER_POOL_ID=               # `CognitoUserPoolID` - the user pool id
-USER_POOL_WEB_CLIENT_ID=    # `CognitoAppClientID` - the app client id
-API_ENDPOINT=               # `ServiceEndpointWebsocket` - the addrewss of the API Gateway WebSocket
-DOMAIN_NAME=                # `DomainName` - the domain of the CloudFront distribution
-```
+- `REGION`, `USER_POOL_ID`, `USER_POOL_WEB_CLIENT_ID`, `API_ENDPOINT`, `DOMAIN_NAME`
 
 ## Frontend
 
