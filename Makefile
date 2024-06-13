@@ -78,15 +78,6 @@ deploy-cf: deploy-backend prepare-cf
 validate-cf: prepare-cf
 	sam validate --template-file packaged-template.yml
 
-run-lambda:
-	sam local start-lambda --template-file packaged-template.yml
-
-run-api:
-	sam local start-api --template-file packaged-template.yml
-
-invoke-ask:
-	sam local invoke APILambdaFunction --template-file packaged-template.yml --event events/websocket-ask.json --env-vars events/env.json
-
 deploy: deploy-backend deploy-frontend deploy-cf
 
 all: install create-bucket package-layer create-layer create-assistant deploy
