@@ -1,6 +1,9 @@
 install:
 	pip install -r admin/requirements.txt
 
+upsert-assistant:
+	python ./admin/create_assistant.py admin/assistant.yml
+
 create-bucket:
 	bash ./admin/createDeploymentBucket.sh
 
@@ -81,3 +84,6 @@ validate-cf: prepare-cf
 deploy: deploy-backend deploy-frontend deploy-cf
 
 all: install create-bucket package-layer create-layer create-assistant deploy
+
+open:
+	open "https://${DOMAIN_NAME}"

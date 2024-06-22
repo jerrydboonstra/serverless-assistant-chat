@@ -43,15 +43,17 @@ Or, create an Assistant instance using our python script.
 
 Create a Python 3.10+ venv and install the [requirements.txt](admin/requirements.txt).
 
-Then you can update the `instructions` field and deploy it.
+Optionally update the `instructions` field in [assistant.yml](./admin/assistant.yml).
+
+Deploy it to OpenAI with:
 
 ```sh
-python ./admin/create_assistant.py admin/assistant.yml
+make upsert-assistant
 ```
 
 Upon success you'll get an assistant ID.  You'll need this.  
 
-- Update the [`assistant.yml`](admin/assistant.yml) file and give the `AssistantId` field this value.
+- Update the `assistant.yml` file and give the `AssistantId` field this value.
 This allows you to update the prompt and update the existing assistant instance.
 - add `ASSISTANT_ID=yourvalue` to your environment (.env)
 
@@ -63,7 +65,7 @@ Lambda code and place it in S3 for the Lambda deployment by following the steps 
 First we create an S3 bucket to hold the deployable Lambda code (remember S3 bucket names are globally unique). 
 
 ```sh
-./admin/createDeploymentBucket.sh
+make create-bucket
 ```
 
 ### Build Backend
@@ -76,7 +78,7 @@ make build-backend
 
 ### Deploy Backend
 
-Finally we upload the built artifact by running the following command
+Finally we build and deploy our Lambda code by running the following command
 
 ```sh
 make deploy-backend
@@ -85,7 +87,7 @@ make deploy-backend
 ### Build Backend Lambda Layer
 
 We need to give our backend access to the OpenAI API.  
-We do this by creating a Lambda layer that contains the OpenAI Python SDK and dependencies.
+We do this by creating a Lambda layer that contains the OpenAI NodeJS SDK and dependencies.
 
 ```sh
 make prepare-layer
@@ -129,7 +131,7 @@ make build-frontend
 ```
 
 ### Deploy
-To deploy the frontend, run the following command from the project root directory. The `FE_DEPLOYMENT_BUCKET` is the name of the bucket provided when deploying the CloudFormation template in the previous step.
+To build and deploy the frontend, run the following command from the project root directory. The `FE_DEPLOYMENT_BUCKET` is the name of the bucket provided when deploying the CloudFormation template in the previous step.
 
 ```sh
 make deploy-frontend

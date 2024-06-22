@@ -1,9 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Amplify, Auth } from 'aws-amplify';
 import { withAuthenticator } from '@aws-amplify/ui-react';
 import useWebSocket from 'react-use-websocket';
 import ReactMarkdown from 'react-markdown';
 import '@aws-amplify/ui-react/styles.css';
+
+import {
+  ChatContainer,
+  UserMessage,
+  AssistantMessage,
+  InputContainer,
+  InputField,
+  MessageList,
+  MessageGroup,
+  AppContainer,
+} from './ChatComponents';
 import './App.css';
 import lens from './assets/lens.png';
 import spinner from './assets/spinner.gif';
@@ -12,7 +23,6 @@ const REGION = process.env.REGION || '';
 const USER_POOL_ID = process.env.USER_POOL_ID || '';
 const USER_POOL_WEB_CLIENT_ID = process.env.USER_POOL_WEB_CLIENT_ID || '';
 const API_ENDPOINT = process.env.API_ENDPOINT || '';
-
 
 Amplify.configure({
   Auth: {
@@ -23,68 +33,99 @@ Amplify.configure({
   },
 });
 
-function App() {
-  const { lastJsonMessage, sendJsonMessage, readyState } = useWebSocket(
-    API_ENDPOINT,
-    {
-      onOpen: () => {
-        console.log('WebSocket connection established.');
-      },
-      onMessage(event) {
-        if (event.data != 'End') { // Indicates no more tokens
-          if (!event.data.includes('Endpoint request timed out')) { // Exclude APIGateway timeout message
-            setAnswer(answer + event.data);
-          }
-        } else {
-          setLoading(false);
-        }
-      },
-      share: true,
-      filter: () => false,
-      retryOnError: true,
-      shouldReconnect: () => true,
-    },
-  );
+export interface Message {
+  message: string;
+  is_input: boolean;
+}
 
-  const sendPrompt = async (event) => {
+function App() {
+  const { sendJsonMessage } = useWebSocket(API_ENDPOINT, {
+    onOpen: () => {
+      console.log('WebSocket connection established.');
+    },
+    onMessage(event) {
+      const message = JSON.parse(event.data);
+      if (!message.end) {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          { ...prev[prev.length - 1], message: prev[prev.length - 1].message + message.data },
+        ]);
+      } else if (!message.error) {
+        setLoading(false);
+      }
+    },
+    share: true,
+    filter: () => false,
+    retryOnError: true,
+    shouldReconnect: () => true,
+  });
+
+  const sendPrompt = async (event: React.KeyboardEvent) => {
     if (event.key !== 'Enter') {
       return;
     }
-    setAnswer('');
     setLoading(true);
+    const currentPrompt = prompt;
+
+    setMessages((prev) => [
+      ...prev,
+      { is_input: true, message: currentPrompt },
+      { is_input: false, message: '' },
+    ]);
+
     sendJsonMessage({
       action: 'ask',
-      data: prompt,
+      data: currentPrompt,
       token: (await Auth.currentSession()).getIdToken().getJwtToken(),
     });
+
+    updatePrompt('');
   };
+
+  const messageListRef = useRef<HTMLDivElement>(null);
 
   const [prompt, updatePrompt] = useState('');
   const [loading, setLoading] = useState(false);
-  const [answer, setAnswer] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  useEffect(() => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   return (
-    <div className="app">
-      <div className="app-container">
-        <div className="spotlight__wrapper">
-          <input
-            type="text"
-            className="spotlight__input"
-            placeholder="Ask me anything..."
+    <AppContainer>
+      <ChatContainer>
+        <MessageList ref={messageListRef}>
+          {messages.map((message, index) => (
+            <MessageGroup key={`${message.is_input}_${index}`}>
+              {message.is_input ? (
+                <UserMessage>
+                  <ReactMarkdown>{message.message}</ReactMarkdown>
+                </UserMessage>
+              ) : (
+                <AssistantMessage>
+                  <ReactMarkdown>{message.message}</ReactMarkdown>
+                </AssistantMessage>
+              )}
+            </MessageGroup>
+          ))}
+        </MessageList>
+        <InputContainer>
+          <InputField
+            placeholder="Type your message..."
+            value={prompt}
             disabled={loading}
+            onChange={(e) => updatePrompt(e.target.value)}
+            onKeyDown={(e) => sendPrompt(e)}
             style={{
               backgroundImage: loading ? `url(${spinner})` : `url(${lens})`,
             }}
-            onChange={(e) => updatePrompt(e.target.value)}
-            onKeyDown={(e) => sendPrompt(e)}
           />
-        </div>
-
-        <div className="answer">
-          <ReactMarkdown>{answer}</ReactMarkdown>
-        </div>
-      </div>
-    </div>
+        </InputContainer>
+      </ChatContainer>
+    </AppContainer>
   );
 }
 

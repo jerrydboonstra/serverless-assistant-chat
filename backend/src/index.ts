@@ -176,11 +176,10 @@ interface ICallbackHandler {
 async function main(userId: string, prompt: string, connectionId: string) {
   const callbackHandler: ICallbackHandler = {
     async handleLLMNewToken(token: string) {
-  
       const postToConnectionCommandResp = await apiGwManApiClient.send(
         new PostToConnectionCommand({
           ConnectionId: connectionId,
-          Data: textEncoder.encode(token),
+          Data: JSON.stringify({ data: token }), 
         }),
       );
       console.log('stream token', { token });
@@ -190,12 +189,13 @@ async function main(userId: string, prompt: string, connectionId: string) {
       const postToConnectionCommandResp = await apiGwManApiClient.send(
         new PostToConnectionCommand({
           ConnectionId: connectionId,
-          Data: textEncoder.encode('End'),
+          Data: JSON.stringify({ end: true }),
         }),
       );
       console.log('stream end');
       console.log(`end postToConnectionCommand resp => ${JSON.stringify(postToConnectionCommandResp)}`);
     },
+
   };
 
   const threadId = await findOrCreateThread(userId, prompt);
