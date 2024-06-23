@@ -1,37 +1,37 @@
 import { Handler } from 'aws-lambda';
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { decode, verify } from 'jsonwebtoken';
-import { promisify, TextEncoder } from 'util';
+import { promisify } from 'util';
 import jwksRsa from 'jwks-rsa';
 import OpenAI from 'openai';
 import { ThreadCreateParams } from 'openai/resources/beta/threads/threads';
 import { MessageCreateParams, TextDelta } from 'openai/resources/beta/threads/messages';
 
-const textEncoder = new TextEncoder();
+const jkws_uri = process.env.JWKS_URI || '';
+const api_gw_endpoint = process.env.API_GW_ENDPOINT;
+const issuer = process.env.ISSUER;
+const audience = process.env.AUDIENCE || '';
+const assistant_id = process.env.ASSISTANT_ID || '';
+const region = process.env.REGION;
+const secretName = process.env.OPENAI_API_KEY_NAME || "OpenAIAPIKeyName";
 
-const JWKS_URI = process.env.JWKS_URI || '';
-const API_GW_ENDPOINT = process.env.API_GW_ENDPOINT;
-const ISSUER = process.env.ISSUER;
-const AUDIENCE = process.env.AUDIENCE || '';
-const ASSISTANT_ID = process.env.ASSISTANT_ID || '';
-
-if (!JWKS_URI || !API_GW_ENDPOINT || !ISSUER || !AUDIENCE || !ASSISTANT_ID) {
+if (!jkws_uri || !api_gw_endpoint || !issuer || !audience || !assistant_id) {
   throw new Error('One or more required environment variables are missing.');
 }
 
 const apiGwManApiClient = new ApiGatewayManagementApiClient({
-  region: process.env.AWS_REGION,
-  endpoint: API_GW_ENDPOINT,
+  region: region,
+  endpoint: api_gw_endpoint,
 });
 
-const dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const openai = new OpenAI();
+const dynamoDbClient = new DynamoDBClient({ region: region });
 
 const client = jwksRsa({
   cache: true,
   rateLimit: true,
-  jwksUri: JWKS_URI,
+  jwksUri: jkws_uri,
 });
 
 const getSigningKey = promisify(client.getSigningKey);
@@ -40,7 +40,7 @@ async function verifyToken(token: string, publicKey: string, audience: string): 
   try {
     await verify(token, publicKey, {
       audience,
-      issuer: ISSUER,
+      issuer: issuer,
     });
   } catch (err) {
     throw new Error('Token verification failed');
@@ -61,7 +61,7 @@ async function authorize(token: string): Promise<boolean> {
     const signingKey = await getSigningKey(decodedToken.header.kid);
     if (signingKey) {
       const publicKey = signingKey.getPublicKey();
-      await verifyToken(token, publicKey, AUDIENCE);
+      await verifyToken(token, publicKey, audience);
       return true;
     }
   } catch (err) {
@@ -151,7 +151,7 @@ const handler: Handler = async (event, context) => {
   };
 };
 
-async function findOrCreateThread(userId: string, prompt: string): Promise<string> {
+async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI): Promise<string> {
   let threadId = await getThreadId(userId);
 
   if (!threadId) {
@@ -166,6 +166,17 @@ async function findOrCreateThread(userId: string, prompt: string): Promise<strin
     await openai.beta.threads.messages.create(threadId, messages);
   }
   return threadId;
+}
+
+async function getOpenAiApiKey(): Promise<string | undefined> {
+  const client = new SecretsManagerClient({region});
+  try {
+    const response = await client.send(new GetSecretValueCommand({ SecretId: secretName }));
+    return response.SecretString;
+  } catch (error) {
+    console.log("Error getting OpenAI API key from Secrets Manager:", error);
+    throw error;
+  }
 }
 
 interface ICallbackHandler {
@@ -198,11 +209,19 @@ async function main(userId: string, prompt: string, connectionId: string) {
 
   };
 
-  const threadId = await findOrCreateThread(userId, prompt);
-  console.log(`Thread ID : ${threadId}`);
-  console.log(`Assistant ID : ${ASSISTANT_ID}`);
+  const openaiApiKey = await getOpenAiApiKey();
 
-  const run = openai.beta.threads.runs.stream(threadId, { assistant_id: ASSISTANT_ID })
+  if (!openaiApiKey) {
+    console.error('OpenAI API key not found in Secrets Manager.');
+    return;
+  }
+
+  const openai = new OpenAI({ apiKey: openaiApiKey });
+  const threadId = await findOrCreateThread(userId, prompt, openai);
+  console.log(`Thread ID : ${threadId}`);
+  console.log(`Assistant ID : ${assistant_id}`);
+
+  const run = openai.beta.threads.runs.stream(threadId, { assistant_id: assistant_id })
     .on('connect', () => console.log('connect'))
     .on('run', (run) => console.log('run', { run }))
     .on('abort', () => { console.log('abort'); })
@@ -215,9 +234,6 @@ async function main(userId: string, prompt: string, connectionId: string) {
       callbackHandler.handleLLMEnd();
     })
     .on('event', (event) => console.log(event))
-    // .on('messageDelta', async (delta: MessageDelta, snapshot) => {
-    //   console.log('messageDelta', { snapshot })
-    // })
     ;
 
   console.log('Waiting for Run Result...');

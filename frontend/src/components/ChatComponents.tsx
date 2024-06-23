@@ -50,10 +50,8 @@ export const UserMessage = styled.div`
   letter-spacing: -0.05em;
 `;
 
-export const AssistantMessage = styled.div`
-  padding: 8px;
-  padding-left: 16px;
-  padding-bottom: 4px;
+export const AssistantMessage = styled.div<{ isEmpty?: boolean }>`
+  padding: ${({ isEmpty }) => (isEmpty ? '32px' : '8px 16px 4px')};
   border-radius: 16px;
   background-color: #f5f5f5;
   color: #000;
@@ -64,7 +62,9 @@ export const AssistantMessage = styled.div`
   font-size: 1rem;
   font-family: 'Lucida Grande', 'Lucida Sans Unicode', sans-serif;
   letter-spacing: -0.05em;
+  min-height: 32px;
 `;
+
 
 export const InputContainer = styled.div`
   border-radius: 12px;
@@ -89,8 +89,8 @@ export const InputField = styled.input`
   border: 1px solid #ccc;
   font-size: 1rem;
   background-repeat: no-repeat;
-  background-position: left center;
-  background-size: 15%;
+  background-position: 10px center;
+  background-size: 10%;
   &:focus {
     outline: none;
     border-color: #0c2556;

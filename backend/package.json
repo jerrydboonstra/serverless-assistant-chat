@@ -23,6 +23,7 @@
         "webpack-node-externals": "^3.0.0"
     },
     "dependencies": {
+        "@aws-sdk/client-secrets-manager": "^3.600.0",
         "@langchain/community": "^0.0.17",
         "jsonwebtoken": "^9.0.2",
         "jwks-rsa": "^3.1.0",

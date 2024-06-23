@@ -7,6 +7,14 @@ upsert-assistant:
 create-bucket:
 	bash ./admin/createDeploymentBucket.sh
 
+create-secret:
+	@echo "Creating secret ${OPENAI_API_KEY_NAME} with value from OPENAI_API_KEY"
+	@aws secretsmanager create-secret \
+		--name ${OPENAI_API_KEY_NAME} \
+		--description "OpenAI API Key" \
+		--region ${REGION} \
+		--secret-string "${OPENAI_API_KEY}"
+
 package-layer:
 	mkdir -p tmp && cd tmp || exit 1; \
 		rm -rf ../openai-layer.zip; \
@@ -53,7 +61,8 @@ update-cf: prepare-cf
 		ParameterKey=BucketName,ParameterValue=${FE_DEPLOYMENT_BUCKET} \
 		ParameterKey=DeploymentBucketName,ParameterValue=${BE_DEPLOYMENT_BUCKET} \
 		ParameterKey=AssistantId,ParameterValue=${ASSISTANT_ID} \
-		ParameterKey=OpenAiApiKey,ParameterValue=${OPENAI_API_KEY} \
+		ParameterKey=OpenAiApiKeyName,ParameterValue=${OPENAI_API_KEY_NAME} \
+		ParameterKey=OpenAiApiKeySecretArn,ParameterValue=${OPENAI_SECRET_ARN} \
 		ParameterKey=BuildTimestamp,ParameterValue=${BUILD_TIMESTAMP}
 
 deploy-frontend: build-frontend
@@ -75,7 +84,8 @@ deploy-cf: deploy-backend prepare-cf
 			BucketName=${FE_DEPLOYMENT_BUCKET} \
 			DeploymentBucketName=${BE_DEPLOYMENT_BUCKET} \
 			AssistantId=${ASSISTANT_ID} \
-			OpenAiApiKey=${OPENAI_API_KEY} \
+			OpenAiApiKeyName=${OPENAI_API_KEY_NAME} \
+			OpenAiApiKeySecretArn=${OPENAI_SECRET_ARN} \
 			BuildTimestamp=${BUILD_TIMESTAMP}
 
 validate-cf: prepare-cf
@@ -87,3 +97,6 @@ all: install create-bucket package-layer create-layer create-assistant deploy
 
 open:
 	open "https://${DOMAIN_NAME}"
+
+start:
+	cd frontend && npm start

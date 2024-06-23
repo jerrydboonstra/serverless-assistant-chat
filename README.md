@@ -16,16 +16,17 @@ I use a `.env` file with `direnv`. Otherwise prefix these with "export".
 
 ```sh
 # BACKEND
-AWS_REGION=us-east-2
+REGION=us-east-2
 STACK_NAME=serverless-assistant-chat
 BE_DEPLOYMENT_BUCKET=serverless-assistant-chat
 FE_DEPLOYMENT_BUCKET=serverless-assistant-chat-fe
 USER_EMAIL=you@example.com
-OPENAI_API_KEY=yourkey
+OPENAI_API_KEY=youropenaikeyvalue
+OPENAI_API_KEY_NAME=OpenAIAPIKey
+OPENAI_SECRET_ARN=arn:aws:secretsmanager:yourregion:youraccount:secret:OpenAIAPIKey-xxxxx
 ASSISTANT_ID=
 
 # FRONTEND
-REGION=                     # Your AWS region
 USER_POOL_ID=               # `CognitoUserPoolID` - the user pool id
 USER_POOL_WEB_CLIENT_ID=    # `CognitoAppClientID` - the app client id
 API_ENDPOINT=               # `ServiceEndpointWebsocket` - the address of the API Gateway WebSocket
@@ -83,6 +84,18 @@ Finally we build and deploy our Lambda code by running the following command
 ```sh
 make deploy-backend
 ```
+
+### Create Secret
+
+We don't want to expose our value of `OPENAI_API_KEY` outside our computer unless its encrypted.
+
+Upload it as an AWS secret and it will be used in our Lambda function.
+
+```sh
+make create-secret
+```
+
+Update your `.env` file setting the `OPENAI_SECRET_ARN` value from the previous step.
 
 ### Build Backend Lambda Layer
 

@@ -14,9 +14,12 @@ Parameters:
   AssistantId:
     Type: String
     Description: id of the openai assistant
-  OpenAiApiKey:
+  OpenAiApiKeyName:
     Type: String
-    Description: api key for openai
+    Description: secret name for api key for openai
+  OpenAiApiKeySecretArn:
+    Description: The ARN of the Secret that contains the OpenAI API Key
+    Type: String
   BuildTimestamp:
     Type: String
     Description: build time timestamp for the lambda zip file
@@ -162,6 +165,17 @@ Resources:
     Type: 'AWS::Logs::LogGroup'
     Properties:
       LogGroupName: !Sub '/aws/lambda/api'
+
+  SecretAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Ref OpenAiApiKeySecretArn
+
   IamRoleLambdaExecution:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -174,6 +188,9 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - !Ref SecretAccessPolicy
       Policies:
         - PolicyName: !Join 
             - '-'
@@ -259,7 +276,7 @@ Resources:
               - !Ref 'AWS::URLSuffix'
               - /dev
           ASSISTANT_ID: !Ref AssistantId
-          OPENAI_API_KEY: !Ref OpenAiApiKey
+          OPENAI_API_KEY_NAME: !Ref OpenAiApiKeyName
           REGION: !Ref AWS::Region
           USER_POOL_ID: !GetAtt CognitoUserPool.Arn
           USER_POOL_WEB_CLIENT_ID: !Ref ClientAppClient

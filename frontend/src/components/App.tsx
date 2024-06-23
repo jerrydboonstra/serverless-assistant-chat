@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Amplify, Auth } from 'aws-amplify';
 import { withAuthenticator } from '@aws-amplify/ui-react';
+import '@aws-amplify/ui-react/styles.css';
 import useWebSocket from 'react-use-websocket';
 import ReactMarkdown from 'react-markdown';
-import '@aws-amplify/ui-react/styles.css';
 
 import {
   ChatContainer,
@@ -83,6 +83,7 @@ function App() {
   };
 
   const messageListRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [prompt, updatePrompt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -93,6 +94,12 @@ function App() {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (!loading) {
+      inputRef.current?.focus();
+    }
+  }, [loading]);
 
   return (
     <AppContainer>
@@ -105,7 +112,7 @@ function App() {
                   <ReactMarkdown>{message.message}</ReactMarkdown>
                 </UserMessage>
               ) : (
-                <AssistantMessage>
+                <AssistantMessage isEmpty={message.message === ''}>
                   <ReactMarkdown>{message.message}</ReactMarkdown>
                 </AssistantMessage>
               )}
@@ -114,6 +121,7 @@ function App() {
         </MessageList>
         <InputContainer>
           <InputField
+            ref={inputRef}
             placeholder="Type your message..."
             value={prompt}
             disabled={loading}
