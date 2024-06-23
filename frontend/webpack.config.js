@@ -11,7 +11,8 @@ module.exports = {
   entry: './index.tsx',
   output: {
     path: path.resolve(__dirname, 'www'),
-    publicPath: ''
+    publicPath: '',
+    filename: '[name].[contenthash].js'
   },
   module: {
     rules: [
