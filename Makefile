@@ -15,14 +15,12 @@ create-secret:
 		--region ${REGION} \
 		--secret-string "${OPENAI_API_KEY}"
 
-package-layer:
-	mkdir -p tmp && cd tmp || exit 1; \
-		rm -rf ../openai-layer.zip; \
-		npm install openai && \
-		mkdir -p ./layer && \
-		mv ../node_modules ./layer/nodejs && \
-		zip -r9 ../openai-layer.zip layer; \
-		cd .. && rm -rf tmp; rm -rf package.json package-lock.json;
+package-layer: clean-layer
+	@cd layer && npm install && \
+		mv node_modules nodejs && \
+		cd .. && \
+		zip -r9 openai-layer.zip layer && \
+		rm -rf layer/nodejs
 
 create-layer:
 	aws s3 cp ./openai-layer.zip s3://${BE_DEPLOYMENT_BUCKET}/openai-layer.zip
@@ -37,6 +35,11 @@ clean-backend:
 clean-frontend:
 	rm -rf frontend/node_modules
 	rm -rf frontend/www
+
+clean-layer:
+	rm -rf layer/node_modules
+	rm -rf layer/nodejs
+	rm -rf openai-layer.zip
 
 clean-cf:
 	rm -rf packaged-template.yml

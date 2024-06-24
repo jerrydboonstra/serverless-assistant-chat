@@ -10,3 +10,5 @@ packaged-template.yml
 .vscode/
 openai-layer.zip
 admin/my_assistant.yml
+layer/node_modules/
+layer/nodejs/
