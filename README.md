@@ -66,7 +66,7 @@ Lambda code and place it in S3 for the Lambda deployment by following the steps 
 First we create an S3 bucket to hold the deployable Lambda code (remember S3 bucket names are globally unique). 
 
 ```sh
-make create-bucket
+make create-bucket-backend
 ```
 
 ### Build Backend
@@ -117,6 +117,12 @@ make create-layer
 ## Infrastructure
 
 Once we have the Lambda artifact built and ready to be deployed, we can deploy the supplied Cloud Formation template that will create all the required infrastructure (Lambda, API Gateway, S3 bucket, CloudFront distro, Cognito items etc.)
+
+### Create the bucket to hold the frontend code
+
+```sh
+make create-frontend-backend
+```
 
 ### Deployment
 

@@ -23,7 +23,7 @@ Parameters:
   BuildTimestamp:
     Type: String
     Description: build time timestamp for the lambda zip file
- 
+
 Resources:
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
@@ -48,6 +48,8 @@ Resources:
           DeveloperOnlyAttribute: false
           Mutable: true
           Name: email
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
 
   ClientAppClient:
     Type: AWS::Cognito::UserPoolClient
@@ -83,17 +85,6 @@ Resources:
           Value: !Ref UserEmail
 
 
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      AccessControl: Private
-      BucketName: !Ref BucketName
-
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
@@ -106,8 +97,6 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
-    DependsOn:
-      - S3Bucket
     Properties:
       DistributionConfig:
         Origins:
@@ -156,15 +145,19 @@ Resources:
             Principal:
               Service: "cloudfront.amazonaws.com"
             Action: "s3:GetObject"
-            Resource: !Sub "arn:aws:s3:::${BucketName}/*"
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketName}/*"
             Condition:
               StringEquals:
-                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+                AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
 
   APILogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
-      LogGroupName: !Sub '/aws/lambda/api'
+      LogGroupName: '/aws/lambda/api'
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
 
   SecretAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -222,12 +215,12 @@ Resources:
                 Action:
                   - 'dynamodb:*'
                 Resource:
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/conversationhistory
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/conversationhistory
               - Effect: Allow
                 Action:
                   - 'dynamodb:*'
                 Resource:
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/AssistantThreadTable
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/AssistantThreadTable
       Path: /
       RoleName: !Join 
         - '-'
@@ -260,21 +253,13 @@ Resources:
       Environment:
         Variables:
           APIGW_ARN: !Sub >-
-            arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/dev
+            arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/dev
           JWKS_URI: !Sub >-
             https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}/.well-known/jwks.json
           ISSUER: !Sub >-
             https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}
           AUDIENCE: !Ref ClientAppClient
-          API_GW_ENDPOINT: !Join 
-            - ''
-            - - 'https://'
-              - !Ref WebsocketsApi
-              - .execute-api.
-              - !Ref 'AWS::Region'
-              - .
-              - !Ref 'AWS::URLSuffix'
-              - /dev
+          API_GW_ENDPOINT: !Sub 'https://${WebsocketsApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/dev'
           ASSISTANT_ID: !Ref AssistantId
           OPENAI_API_KEY_NAME: !Ref OpenAiApiKeyName
           REGION: !Ref AWS::Region
@@ -312,7 +297,6 @@ Resources:
     Type: 'AWS::Lambda::Permission'
     DependsOn:
       - WebsocketsApi
-      - APILambdaFunction
     Properties:
       FunctionName: !GetAtt 
         - APILambdaFunction
@@ -378,58 +362,55 @@ Resources:
       ApiId: !Ref WebsocketsApi
 
   ConversationTable:
-        Type: AWS::DynamoDB::Table
-        Properties:
-          TableName: conversationhistory
-          AttributeDefinitions:
-            - AttributeName: id
-              AttributeType: S
-          BillingMode: PAY_PER_REQUEST
-          KeySchema:
-            - AttributeName: id
-              KeyType: HASH
-          SSESpecification:
-            SSEEnabled: true
-          TimeToLiveSpecification:
-            AttributeName: ttl
-            Enabled: true
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: conversationhistory
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
   AssistantThreadTable:
-        Type: AWS::DynamoDB::Table
-        Properties:
-          TableName: AssistantThreadTable
-          AttributeDefinitions:
-            - AttributeName: userId
-              AttributeType: S
-          BillingMode: PAY_PER_REQUEST
-          KeySchema:
-            - AttributeName: userId
-              KeyType: HASH
-          SSESpecification:
-            SSEEnabled: true
-          TimeToLiveSpecification:
-            AttributeName: ttl
-            Enabled: true
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AssistantThreadTable
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
 
 Outputs:
   CognitoUserPoolID:
     Value: !Ref CognitoUserPool
-    Description: The UserPool ID
+    Description: USER_POOL_ID
   CognitoAppClientID:
     Value: !Ref ClientAppClient
-    Description: The app client id
+    Description: USER_POOL_WEB_CLIENT_ID
   DomainName:
     Value: !GetAtt CloudFrontDistribution.DomainName
-    Description: The Cloudfront domain your app is hosted at
+    Description: DOMAIN_NAME
   ServiceEndpointWebsocket:
-    Description: WSS URL of the service endpoint
-    Value: !Join 
-      - ''
-      - - 'wss://'
-        - !Ref WebsocketsApi
-        - .execute-api.
-        - !Ref 'AWS::Region'
-        - .
-        - !Ref 'AWS::URLSuffix'
-        - /dev
+    Description: API_ENDPOINT
+    Value: !Sub wss://${WebsocketsApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/dev
     Export:
       Name: ServiceEndpointWebsocket

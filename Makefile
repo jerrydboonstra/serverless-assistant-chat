@@ -4,8 +4,11 @@ install:
 upsert-assistant:
 	python ./admin/create_assistant.py admin/assistant.yml
 
-create-bucket:
-	bash ./admin/createDeploymentBucket.sh
+create-backend-bucket:
+	OUR_BUCKET=${BE_DEPLOYMENT_BUCKET} bash ./admin/create_bucket.sh 
+
+create-frontend-bucket:
+	OUR_BUCKET=${FE_DEPLOYMENT_BUCKET} bash ./admin/create_bucket.sh 
 
 create-secret:
 	@echo "Creating secret ${OPENAI_API_KEY_NAME} with value from OPENAI_API_KEY"
@@ -77,10 +80,11 @@ prepare-cf:
 	  --s3-bucket ${BE_DEPLOYMENT_BUCKET} \
 	  --output-template-file packaged-template.yml
 
-deploy-cf: deploy-backend prepare-cf
+deploy-cf: deploy-backend prepare-cf lint-cf
 	sam deploy \
 		--template-file packaged-template.yml \
 		--stack-name ${STACK_NAME} \
+		--region ${REGION} \
 		--capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
 		--parameter-overrides \
 			UserEmail=${USER_EMAIL} \
@@ -94,12 +98,30 @@ deploy-cf: deploy-backend prepare-cf
 validate-cf: prepare-cf
 	sam validate --template-file packaged-template.yml
 
+lint-cf: prepare-cf
+	sam validate --template-file packaged-template.yml --lint
+
 deploy: deploy-backend deploy-frontend deploy-cf
 
-all: install create-bucket create-secret package-layer create-layer create-assistant deploy
+all: install create-backend-bucket create-frontend-bucket create-secret package-layer create-layer create-assistant deploy
 
 open:
 	open "https://${DOMAIN_NAME}"
 
 start:
 	cd frontend && npm start
+
+destroy:
+	@sam delete --stack-name ${STACK_NAME} --region ${REGION} --s3-bucket ${FE_DEPLOYMENT_BUCKET}
+	@echo "Run 'make destroy-backend-bucket' to delete the backend bucket"
+	@echo "Run 'make destroy-frontend-bucket' to delete the frontend bucket"
+
+destroy-backend-bucket:
+	aws s3 rm s3://${BE_DEPLOYMENT_BUCKET} --recursive
+	aws s3api delete-bucket \
+		--bucket ${BE_DEPLOYMENT_BUCKET} --region ${REGION}
+
+destroy-frontend-bucket:
+	aws s3 rm s3://${FE_DEPLOYMENT_BUCKET} --recursive
+	aws s3api delete-bucket \
+		--bucket ${FE_DEPLOYMENT_BUCKET} --region ${REGION}
