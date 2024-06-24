@@ -96,7 +96,7 @@ validate-cf: prepare-cf
 
 deploy: deploy-backend deploy-frontend deploy-cf
 
-all: install create-bucket package-layer create-layer create-assistant deploy
+all: install create-bucket create-secret package-layer create-layer create-assistant deploy
 
 open:
 	open "https://${DOMAIN_NAME}"
