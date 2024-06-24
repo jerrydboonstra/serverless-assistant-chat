@@ -50,8 +50,8 @@ export const UserMessage = styled.div`
   letter-spacing: -0.05em;
 `;
 
-export const AssistantMessage = styled.div<{ isEmpty?: boolean }>`
-  padding: ${({ isEmpty }) => (isEmpty ? '32px' : '8px 16px 4px')};
+export const AssistantMessage = styled.div`
+  padding: 8px 16px 4px;
   border-radius: 16px;
   background-color: #f5f5f5;
   color: #000;
@@ -63,6 +63,7 @@ export const AssistantMessage = styled.div<{ isEmpty?: boolean }>`
   font-family: 'Lucida Grande', 'Lucida Sans Unicode', sans-serif;
   letter-spacing: -0.05em;
   min-height: 32px;
+  text-align: left;
 `;
 
 
@@ -95,4 +96,26 @@ export const InputField = styled.input`
     outline: none;
     border-color: #0c2556;
   }
+`;
+
+export const Button = styled.button`
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 4px 8px;
+  &:focus {
+    outline: none;
+  }
+`;
+
+export const ButtonGroup = styled.div`
+  display: flex;
+  justify-content: flex-end;
+`;
+
+export const AssistantMessageGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 `;

@@ -1,5 +1,5 @@
 import { Handler } from 'aws-lambda';
-import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { DeleteItemCommand, DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { decode, verify } from 'jsonwebtoken';
@@ -83,72 +83,73 @@ async function getThreadId(userId: string): Promise<string | null> {
 }
 
 async function saveThreadId(userId: string, threadId: string): Promise<void> {
-  const command = new PutItemCommand({
+  const params = {
     TableName: 'AssistantThreadTable',
     Item: {
       userId: { S: userId },
       threadId: { S: threadId },
     },
-  });
+  };
 
+  const command = new PutItemCommand(params);
   await dynamoDbClient.send(command);
 }
 
-const handler: Handler = async (event, context) => {
-  console.log('EVENT: \n' + JSON.stringify(event, null, 2));
-  const connectionId = event.requestContext.connectionId;
-  const routeKey = event.requestContext.routeKey;
+async function updateRatingInDynamoDB(messageId: string, rating: string): Promise<void> {
+  const params = {
+    TableName: 'conversationhistory',
+    Key: {
+      id: { S: messageId },
+    },
+    ExpressionAttributeValues: {
+      ":inc": { N: rating === "up" ? "1" : "-1" },
+      ":zero": { N: "0" }
+    },
+    UpdateExpression: "SET rating = if_not_exists(rating, :zero) + :inc"
+  };
 
-  try {
-    switch (routeKey) {
-      case '$connect':
-        console.log('$connect');
-        break;
-      case '$disconnect':
-        console.log('$disconnect');
-        break;
-      case 'ask': {
-        console.log('ask');
-        const requestData = JSON.parse(event.body);
-        const token = requestData.token;
-        const isAuthorized = await authorize(token);
-        if (!isAuthorized) {
-          console.log('Not Authorized');
-          return {
-            statusCode: 401,
-            body: JSON.stringify({ message: 'Unauthorized' }),
-          };
-        }
+  const command = new UpdateItemCommand(params);
+  await dynamoDbClient.send(command);
+}
 
-        console.log('Authorized');
-        const prompt = requestData.data;
-        const decodedToken = decodeToken(token);
-        const userId = decodedToken.payload['sub'];
-        console.log('userId', { userId });
 
-        await main(userId, prompt, connectionId);
-        break;
-      }
-      default:
-        console.log('default');
-        break;
+async function resetUserThreadInDynamoDB(userId: string): Promise<void> {
+  const params = {
+    TableName: 'AssistantThreadTable',
+    Key: {
+      userId: { S: userId },
     }
-  } catch (error) {
-    console.error('Error handling request:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: 'Internal Server Error' }),
-    };
+  };
+
+  const command = new DeleteItemCommand(params);
+  await dynamoDbClient.send(command);
+}
+
+async function saveConversationHistoryInDynamoDB(messageId: string, messages: {role: string, message: string}[]): Promise<void> {
+  const params = {
+    TableName: 'conversationhistory',
+    Item: {
+      id: { S: messageId },
+      messages: { L: messages.map(m => ({ M: { role: { S: m.role }, message: { S: m.message } }})) }
+    },
+  };
+
+  await dynamoDbClient.send(new PutItemCommand(params));
+}
+
+async function authorizeAndExtractUserId(token: string): Promise<string | null> {
+  const isAuthorized = await authorize(token);
+  if (!isAuthorized) {
+    console.log('Not Authorized');
+    return null;
   }
 
-  return {
-    statusCode: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: '{}',
-  };
-};
+  console.log('Authorized');
+  const decodedToken = decodeToken(token);
+  const userId = decodedToken.payload['sub'];
+  console.log({ userId });
+  return userId;
+}
 
 async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI): Promise<string> {
   let threadId = await getThreadId(userId);
@@ -197,6 +198,158 @@ async function processQueue(connectionId: string) {
   
   isProcessing = false;
 }
+
+async function saveConversationHistoryInDynamoDB(messageId: string, messages: {role: string, message: string}[]): Promise<void> {
+  const params = {
+    TableName: 'conversationhistory',
+    Item: {
+      id: { S: messageId },
+      messages: { L: messages.map(m => ({ M: { role: { S: m.role }, message: { S: m.message } }})) }
+    },
+  };
+
+  await dynamoDbClient.send(new PutItemCommand(params));
+}
+
+async function authorizeAndExtractUserId(token: string): Promise<string | null> {
+  const isAuthorized = await authorize(token);
+  if (!isAuthorized) {
+    console.log('Not Authorized');
+    return null;
+  }
+
+  console.log('Authorized');
+  const decodedToken = decodeToken(token);
+  const userId = decodedToken.payload['sub'];
+  console.log({ userId });
+  return userId;
+}
+
+async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI): Promise<string> {
+  let threadId = await getThreadId(userId);
+
+  if (!threadId) {
+    const messages: ThreadCreateParams.Message[] = [{ role: 'user', content: prompt }];
+    const thread = await openai.beta.threads.create({
+      messages: messages.length > 0 ? messages : [{ role: 'user', content: 'hello.' }],
+    });
+    threadId = thread.id;
+    await saveThreadId(userId, threadId);
+  } else {
+    const messages: MessageCreateParams = { role: 'user', content: prompt };
+    await openai.beta.threads.messages.create(threadId, messages);
+  }
+  return threadId;
+}
+
+async function getOpenAiApiKey(): Promise<string | undefined> {
+  const client = new SecretsManagerClient({region});
+  try {
+    const response = await client.send(new GetSecretValueCommand({ SecretId: secretName }));
+    return response.SecretString;
+  } catch (error) {
+    console.log("Error getting OpenAI API key from Secrets Manager:", error);
+    throw error;
+  }
+}
+
+interface ICallbackHandler {
+  handleLLMNewToken(token: string): Promise<void>;
+  handleLLMEnd(): Promise<void>;
+}
+
+const handler: Handler = async (event, context) => {
+  console.log('EVENT: \n' + JSON.stringify(event, null, 2));
+  const connectionId = event.requestContext.connectionId;
+  const routeKey = event.requestContext.routeKey;
+
+  try {
+    console.log('routeKey', routeKey);
+    switch (routeKey) {
+      case '$connect':
+        console.log('$connect');
+        break;
+      case '$disconnect':
+        console.log('$disconnect');
+        break;
+      case 'ask': {
+        console.log('ask');
+        const requestData = JSON.parse(event.body);
+        const token = requestData.token;
+        const userId = await authorizeAndExtractUserId(token);
+        if (!userId) {
+          return {
+            statusCode: 401,
+            body: JSON.stringify({ message: 'Unauthorized' }),
+          };
+        }
+
+        const prompt = requestData.data;
+        let result = await main(userId, prompt, connectionId);
+        console.log('Run Result' + result);
+        break;
+      }
+      case '$default': {
+        const requestData = JSON.parse(event.body);
+        const action = requestData.action;
+        console.log({ action });
+
+        const token = requestData.token;
+        const userId = await authorizeAndExtractUserId(token);
+        if (!userId) {
+          return {
+            statusCode: 401,
+            body: JSON.stringify({ message: 'Unauthorized' }),
+          };
+        }
+
+        switch (action) {
+          case 'rate': {
+            const messageId = requestData.data.messageId;
+            const rating = requestData.data.rating; // This should be either "up" or "down"
+            console.log('Rating message', { messageId, rating });
+            await updateRatingInDynamoDB(messageId, rating);
+            break;
+          }
+          case 'reset': {
+            console.log('Resetting user thread', { userId });
+            await resetUserThreadInDynamoDB(userId);
+            break;
+          }
+          case 'history': {
+            const messageId = requestData.data.messageId;
+            const messages = requestData.data.messages; // an array of objects, each with properties `role` and `message`
+            console.log('Storing message history', { messageId, messages});
+            await saveConversationHistoryInDynamoDB(messageId, messages);
+            break;
+          }
+          default: {
+            console.log('action default');
+            break;
+          }
+        }
+      }
+      default: {
+        console.log('default');
+        break;
+      }
+    }
+  } catch (error) {
+    console.error('Error handling request:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: 'Internal Server Error' }),
+    };
+  }
+
+  return {
+    statusCode: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+    body: '{}',
+  };
+};
 
 async function main(userId: string, prompt: string, connectionId: string) {
   const callbackHandler: ICallbackHandler = {
