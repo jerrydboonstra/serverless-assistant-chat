@@ -6,7 +6,7 @@ Both backend and frontend are implemented with TypeScript.
 
 ![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-<img src="https://raw.githubusercontent.com/jerrydboonstra/serverless-assistant-chat/blogpost1/images/screengrab2.gif" alt="screengrab" style="width:75%;">
+<img src="https://raw.githubusercontent.com/jerrydboonstra/serverless-assistant-chat/blogpost1/images/screengrab3.gif" alt="screengrab" style="width:75%;">
 
 ## Architecture
 
