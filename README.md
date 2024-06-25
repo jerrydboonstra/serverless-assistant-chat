@@ -80,7 +80,7 @@ Before creating the insfrastructure via the Cloud Formation template, build the 
 First we create an S3 bucket to hold the deployable Lambda code (remember S3 bucket names are globally unique). 
 
 ```sh
-make create-bucket-backend
+make create-backend-bucket
 ```
 
 #### Build Backend
@@ -135,7 +135,7 @@ Once we have the Lambda artifact built and ready to be deployed, we can deploy t
 #### Create the bucket to hold the frontend code
 
 ```sh
-make create-frontend-backend
+make create-frontend-bucket
 ```
 
 #### Deployment
