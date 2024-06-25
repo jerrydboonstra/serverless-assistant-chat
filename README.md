@@ -4,19 +4,22 @@ A simple web application demonstrating the use of AWS Lambda serverless with sta
 
 Both backend and frontend are implemented with TypeScript.
 
-The architecture of the application is illustrated below:-
+The architecture of the application is illustrated below:
 
-![Architecture](images/architecture2.png)
+<img src="https://raw.githubusercontent.com/jerrydboonstra/serverless-assistant-chat/blogpost1/images/arch.png" alt="arch" style="width:75%;">
+
 
 ## Environment
 
-Set these environment variables with your own values. Bucket names are globally unique.
+1. Set the filled-in `BACKEND` environment variables **with your own values**. 
+    - **Bucket names are globally unique**, so you will at least need to update these.
 
-I use a `.env` file with `direnv`. Otherwise prefix these with "export".
+I use a `.env` file with [direnv](https://direnv.net/). Otherwise prefix these with "export" and execute in your shell.
 
 ```sh
+# .env
 # BACKEND
-REGION=us-east-2
+REGION=us-east-1
 STACK_NAME=serverless-assistant-chat
 BE_DEPLOYMENT_BUCKET=serverless-assistant-chat
 FE_DEPLOYMENT_BUCKET=serverless-assistant-chat-fe
@@ -36,14 +39,11 @@ DISTRIBUTION_ID=
 
 ## Create Assistant Instance
 
-### Roll your own
-Using the same account as your `OPENAI_API_KEY` you can roll your own and use the [OpenAI Assistant API v2](https://platform.openai.com/docs/api-reference/chat/create) to create an assistant instance.
-
+Creating an Assistant instance is a one-time operation, but you can continue to modify it after creation.
+There are many methods but two are:
 
 ### Python script
-Or, create an Assistant instance using our python script.
-
-Create a Python 3.10+ venv and install the [requirements.txt](admin/requirements.txt).
+Create an Assistant instance using our python script. Create a Python 3.10+ venv and install the [requirements.txt](admin/requirements.txt).
 
 Optionally update the `instructions` field in [assistant.yml](./admin/assistant.yml).
 
@@ -53,15 +53,20 @@ Deploy it to OpenAI with:
 make upsert-assistant
 ```
 
+### Roll your own
+Or, using the same account as your `OPENAI_API_KEY` you can roll your own and use the [OpenAI Assistant API v2](https://platform.openai.com/docs/api-reference/chat/create) to create an assistant instance.
+
+
+### Output from creation step
+
 Upon success you'll get an assistant ID.  You'll need this.  
 
-- Update the `assistant.yml` file and give the `AssistantId` field this value.
+- Update the [`assistant.yml`](admin/assistant.yml) file and give the `AssistantId` field this value.
 This allows you to update the prompt and update the existing assistant instance.
 - add `ASSISTANT_ID=yourvalue` to your environment (.env)
 
 ## Backend
-Before creating the insfrastructure via the Cloud Formation template, build the backend
-Lambda code and place it in S3 for the Lambda deployment by following the steps below
+Before creating the insfrastructure via the Cloud Formation template, build the backend Lambda code and place it in S3 for the Lambda deployment by following the steps below
 
 ### Create the bucket to hold the built Lambda code
 First we create an S3 bucket to hold the deployable Lambda code (remember S3 bucket names are globally unique). 
@@ -90,13 +95,13 @@ make deploy-backend
 
 We don't want to expose our value of `OPENAI_API_KEY` outside our computer unless its encrypted.
 
-Upload it as an AWS secret and it will be used in our Lambda function.
+Ensure its set in your environment then run this make target to upload it as an AWS secret. It will be used in our Lambda function.
 
 ```sh
 make create-secret
 ```
 
-Update your `.env` file setting the `OPENAI_SECRET_ARN` value from the previous step.
+Update your `.env` file setting the `OPENAI_SECRET_ARN` value from the output from step.
 
 ### Build Backend Lambda Layer
 
@@ -162,7 +167,7 @@ Check your email for a welcome email from Cognito with a temporary password.
 
 Then you can navidate to the CloudFront domain that was created by the CloudFormation stack (`DOMAIN_NAME`), enter your email address and password and start to use the application.
 
-![Screengrab](images/screengrab.gif)
+<img src="https://raw.githubusercontent.com/jerrydboonstra/serverless-assistant-chat/blogpost1/images/screengrab2.gif" alt="screengrab" style="width:75%;">
 
 ## Making changes after stack deployment
 
@@ -181,3 +186,13 @@ Deploying backend-end changes require a stack update to take effect.
 ```sh
 make deploy-cf
 ```
+
+## Reference
+
+- [AWS Serverless Application Model (SAM)](https://aws.amazon.com/serverless/sam/)
+- [AWS Lambda](https://aws.amazon.com/lambda/)
+- [AWS API Gateway with Websockets](https://aws.amazon.com/api-gateway/)
+- [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/)
+- [OpenAI Assistant API](https://platform.openai.com)    
+- [OpenAI NodeJs SDK](https://github.com/openai/openai-node)
+
