@@ -176,11 +176,6 @@ async function getOpenAiApiKey(): Promise<string | undefined> {
   }
 }
 
-interface ICallbackHandler {
-  handleLLMNewToken(token: string): void;
-  handleLLMEnd(): void;
-}
-
 // Queue for managing tokens
 let tokenQueue: string[] = [];
 let isProcessing = false;
@@ -199,64 +194,11 @@ async function processQueue(connectionId: string) {
   isProcessing = false;
 }
 
-async function saveConversationHistoryInDynamoDB(messageId: string, messages: {role: string, message: string}[]): Promise<void> {
-  const params = {
-    TableName: 'conversationhistory',
-    Item: {
-      id: { S: messageId },
-      messages: { L: messages.map(m => ({ M: { role: { S: m.role }, message: { S: m.message } }})) }
-    },
-  };
-
-  await dynamoDbClient.send(new PutItemCommand(params));
-}
-
-async function authorizeAndExtractUserId(token: string): Promise<string | null> {
-  const isAuthorized = await authorize(token);
-  if (!isAuthorized) {
-    console.log('Not Authorized');
-    return null;
-  }
-
-  console.log('Authorized');
-  const decodedToken = decodeToken(token);
-  const userId = decodedToken.payload['sub'];
-  console.log({ userId });
-  return userId;
-}
-
-async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI): Promise<string> {
-  let threadId = await getThreadId(userId);
-
-  if (!threadId) {
-    const messages: ThreadCreateParams.Message[] = [{ role: 'user', content: prompt }];
-    const thread = await openai.beta.threads.create({
-      messages: messages.length > 0 ? messages : [{ role: 'user', content: 'hello.' }],
-    });
-    threadId = thread.id;
-    await saveThreadId(userId, threadId);
-  } else {
-    const messages: MessageCreateParams = { role: 'user', content: prompt };
-    await openai.beta.threads.messages.create(threadId, messages);
-  }
-  return threadId;
-}
-
-async function getOpenAiApiKey(): Promise<string | undefined> {
-  const client = new SecretsManagerClient({region});
-  try {
-    const response = await client.send(new GetSecretValueCommand({ SecretId: secretName }));
-    return response.SecretString;
-  } catch (error) {
-    console.log("Error getting OpenAI API key from Secrets Manager:", error);
-    throw error;
-  }
-}
-
 interface ICallbackHandler {
-  handleLLMNewToken(token: string): Promise<void>;
-  handleLLMEnd(): Promise<void>;
+  handleLLMNewToken(token: string): void;
+  handleLLMEnd(): void;
 }
+
 
 const handler: Handler = async (event, context) => {
   console.log('EVENT: \n' + JSON.stringify(event, null, 2));
@@ -285,8 +227,7 @@ const handler: Handler = async (event, context) => {
         }
 
         const prompt = requestData.data;
-        let result = await main(userId, prompt, connectionId);
-        console.log('Run Result' + result);
+        await main(userId, prompt, connectionId);
         break;
       }
       case '$default': {
@@ -391,8 +332,7 @@ async function main(userId: string, prompt: string, connectionId: string) {
     .on('event', (event) => console.log(event));
 
   console.log('Waiting for Run Result...');
-  const result = await run.finalRun();
-  return result;
+  await run.finalRun();
 }
 
 export { handler };
