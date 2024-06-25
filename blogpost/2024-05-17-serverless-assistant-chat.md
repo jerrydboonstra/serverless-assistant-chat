@@ -14,8 +14,7 @@ If you're considering building a custom chat assistant using the OpenAI Assistan
 
 A fully implemented continuous improvement process for LLM-based applications looks like this:
 
-<img src="https://raw.githubusercontent.com/jerrydboonstra/serverless-assistant-chat/blogpost1/images/cycle3.png" alt="cycle" style="width:85%;">
-
+<img src="https://raw.githubusercontent.com/jerrydboonstra/serverless-assistant-chat/blogpost1/images/cycle4.png" alt="cycle" style="width:85%;">
 
 It takes a lot of effort to build a *full* pipeline, but you have to *start* somewhere, right?
 
