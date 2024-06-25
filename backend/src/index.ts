@@ -38,7 +38,7 @@ const getSigningKey = promisify(client.getSigningKey);
 
 async function verifyToken(token: string, publicKey: string, audience: string): Promise<void> {
   try {
-    await verify(token, publicKey, {
+    verify(token, publicKey, {
       audience,
       issuer: issuer,
     });
@@ -126,8 +126,7 @@ const handler: Handler = async (event, context) => {
         const userId = decodedToken.payload['sub'];
         console.log('userId', { userId });
 
-        let result = await main(userId, prompt, connectionId);
-        console.log('Run Result' + result);
+        await main(userId, prompt, connectionId);
         break;
       }
       default:
@@ -153,12 +152,9 @@ const handler: Handler = async (event, context) => {
 
 async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI): Promise<string> {
   let threadId = await getThreadId(userId);
-
   if (!threadId) {
     const messages: ThreadCreateParams.Message[] = [{ role: 'user', content: prompt }];
-    const thread = await openai.beta.threads.create({
-      messages: messages.length > 0 ? messages : [{ role: 'user', content: 'hello.' }],
-    });
+    const thread = await openai.beta.threads.create({ messages: messages.length > 0 ? messages : [{ role: 'user', content: 'hello.' }] });
     threadId = thread.id;
     await saveThreadId(userId, threadId);
   } else {
@@ -169,7 +165,7 @@ async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI
 }
 
 async function getOpenAiApiKey(): Promise<string | undefined> {
-  const client = new SecretsManagerClient({region});
+  const client = new SecretsManagerClient({ region });
   try {
     const response = await client.send(new GetSecretValueCommand({ SecretId: secretName }));
     return response.SecretString;
@@ -180,37 +176,42 @@ async function getOpenAiApiKey(): Promise<string | undefined> {
 }
 
 interface ICallbackHandler {
-  handleLLMNewToken(token: string): Promise<void>;
-  handleLLMEnd(): Promise<void>;
+  handleLLMNewToken(token: string): void;
+  handleLLMEnd(): void;
+}
+
+// Queue for managing tokens
+let tokenQueue: string[] = [];
+let isProcessing = false;
+
+async function processQueue(connectionId: string) {
+  if (isProcessing) return;
+  isProcessing = true;
+  
+  while (tokenQueue.length > 0) {
+    const token = tokenQueue.shift();
+    if (token !== undefined) {
+      await apiGwManApiClient.send(new PostToConnectionCommand({ ConnectionId: connectionId, Data: JSON.stringify({ data: token }) }));
+    }
+  }
+  
+  isProcessing = false;
 }
 
 async function main(userId: string, prompt: string, connectionId: string) {
   const callbackHandler: ICallbackHandler = {
-    async handleLLMNewToken(token: string) {
-      const postToConnectionCommandResp = await apiGwManApiClient.send(
-        new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: JSON.stringify({ data: token }), 
-        }),
-      );
-      console.log('stream token', { token });
-      console.log(`token postToConnectionCommand resp => ${JSON.stringify(postToConnectionCommandResp)}`);
+    handleLLMNewToken(token: string) {
+      tokenQueue.push(token);
+      processQueue(connectionId).catch(console.error);
     },
-    async handleLLMEnd() {
-      const postToConnectionCommandResp = await apiGwManApiClient.send(
-        new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: JSON.stringify({ end: true }),
-        }),
-      );
-      console.log('stream end');
-      console.log(`end postToConnectionCommand resp => ${JSON.stringify(postToConnectionCommandResp)}`);
+    handleLLMEnd() {
+      apiGwManApiClient.send(new PostToConnectionCommand({ ConnectionId: connectionId, Data: JSON.stringify({ end: true }) }))
+        .then(() => console.log('stream end'))
+        .catch(console.error);
     },
-
   };
 
   const openaiApiKey = await getOpenAiApiKey();
-
   if (!openaiApiKey) {
     console.error('OpenAI API key not found in Secrets Manager.');
     return;
@@ -218,6 +219,7 @@ async function main(userId: string, prompt: string, connectionId: string) {
 
   const openai = new OpenAI({ apiKey: openaiApiKey });
   const threadId = await findOrCreateThread(userId, prompt, openai);
+
   console.log(`Thread ID : ${threadId}`);
   console.log(`Assistant ID : ${assistant_id}`);
 
@@ -233,12 +235,11 @@ async function main(userId: string, prompt: string, connectionId: string) {
     .on('end', () => {
       callbackHandler.handleLLMEnd();
     })
-    .on('event', (event) => console.log(event))
-    ;
+    .on('event', (event) => console.log(event));
 
   console.log('Waiting for Run Result...');
   const result = await run.finalRun();
-  return result
+  return result;
 }
 
 export { handler };
