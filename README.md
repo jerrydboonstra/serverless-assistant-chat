@@ -27,10 +27,11 @@ OPENAI_SECRET_ARN=arn:aws:secretsmanager:yourregion:youraccount:secret:OpenAIAPI
 ASSISTANT_ID=
 
 # FRONTEND
-USER_POOL_ID=               # `CognitoUserPoolID` - the user pool id
-USER_POOL_WEB_CLIENT_ID=    # `CognitoAppClientID` - the app client id
-API_ENDPOINT=               # `ServiceEndpointWebsocket` - the address of the API Gateway WebSocket
-DOMAIN_NAME=                # `DomainName` - the domain of the CloudFront distribution
+USER_POOL_ID=
+USER_POOL_WEB_CLIENT_ID=
+API_ENDPOINT=
+DOMAIN_NAME=
+DISTRIBUTION_ID=
 ```
 
 ## Create Assistant Instance
@@ -138,7 +139,7 @@ When the CloudFormation stack has successfully completed, in the outputs make no
 
 Update the `.env` file with the following vars:
 
-- `REGION`, `USER_POOL_ID`, `USER_POOL_WEB_CLIENT_ID`, `API_ENDPOINT`, `DOMAIN_NAME`
+- `REGION`, `USER_POOL_ID`, `USER_POOL_WEB_CLIENT_ID`, `API_ENDPOINT`, `DOMAIN_NAME`, `DISTRIBUTION_ID`
 
 ## Frontend
 

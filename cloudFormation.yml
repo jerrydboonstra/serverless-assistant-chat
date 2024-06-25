@@ -414,3 +414,8 @@ Outputs:
     Value: !Sub wss://${WebsocketsApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/dev
     Export:
       Name: ServiceEndpointWebsocket
+  CloudfrontDistributionId:
+    Description: DISTRIBUTION_ID
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: CloudfrontDistributionId

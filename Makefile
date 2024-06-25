@@ -72,7 +72,8 @@ update-cf: prepare-cf
 		ParameterKey=BuildTimestamp,ParameterValue=${BUILD_TIMESTAMP}
 
 deploy-frontend: build-frontend
-	cd frontend/ && aws s3 cp www s3://${FE_DEPLOYMENT_BUCKET} --recursive
+	@cd frontend/ && aws s3 cp www s3://${FE_DEPLOYMENT_BUCKET} --recursive
+	@sleep 1 && $(MAKE) flush-cache
 
 prepare-cf:
 	sam package \
@@ -110,6 +111,9 @@ open:
 
 start:
 	cd frontend && npm start
+
+flush-cache:
+	aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*" --no-cli-pager
 
 destroy:
 	@sam delete --stack-name ${STACK_NAME} --region ${REGION} --s3-bucket ${FE_DEPLOYMENT_BUCKET}
