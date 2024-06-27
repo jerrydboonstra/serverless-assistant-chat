@@ -1,4 +1,4 @@
-# Serverless Assistant Chat
+# Serverless Assistant Chat v1
 
 A simple multi-user web application demonstrating the use of AWS serverless to interact with  [OpenAI Assistant API](https://platform.openai.com/docs/api-reference/assistants), via a simple web chat interface with streaming output. 
 
