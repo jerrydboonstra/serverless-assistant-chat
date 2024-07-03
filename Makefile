@@ -129,3 +129,25 @@ destroy-frontend-bucket:
 	aws s3 rm s3://${FE_DEPLOYMENT_BUCKET} --recursive
 	aws s3api delete-bucket \
 		--bucket ${FE_DEPLOYMENT_BUCKET} --region ${REGION}
+
+query-user-thread:
+	@aws dynamodb get-item \
+		--table-name AssistantThreadTable \
+		--key '{"userId": {"S": "${USER_ID}"}}' \
+		--no-cli-pager
+
+query-user-thread-id:
+	@aws dynamodb get-item \
+		--table-name AssistantThreadTable \
+		--key '{"userId": {"S": "${USER_ID}"}}' \
+		--no-cli-pager | jq -r '.Item.threadId.S'
+
+query-threads:
+	@aws dynamodb scan \
+		--table-name AssistantThreadTable \
+		--no-cli-pager
+
+query-history:
+	@aws dynamodb scan \
+		--table-name conversationhistory \
+		--no-cli-pager

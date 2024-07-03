@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, type ReactNode, type FC } from 'react';
 import { Amplify, Auth } from 'aws-amplify';
 import { withAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import useWebSocket from 'react-use-websocket';
 import ReactMarkdown from 'react-markdown';
+import { v4 as uuidv4 } from 'uuid';
 
 import {
   ChatContainer,
@@ -14,6 +15,9 @@ import {
   MessageList,
   MessageGroup,
   AppContainer,
+  Button,
+  ButtonGroup,
+  AssistantMessageGroup
 } from './ChatComponents';
 import './App.css';
 import lens from './assets/lens.png';
@@ -33,10 +37,22 @@ Amplify.configure({
   },
 });
 
-export interface Message {
+interface Message {
+  messageId: string;
   message: string;
   is_input: boolean;
+  role: string;
+  rating: string | null;
 }
+interface ButtonProps {
+  children: ReactNode;
+  onClick?: () => void;
+}
+
+export const ThumbsUp: FC<ButtonProps> = ({ children, onClick }) => <Button onClick={onClick}>{children}</Button>;
+export const ThumbsDown: FC<ButtonProps> = ({ children, onClick }) => <Button onClick={onClick}>{children}</Button>;
+export const TrashButton: FC<ButtonProps> = ({ children, onClick }) => <Button onClick={onClick}>{children}</Button>;
+
 
 function App() {
   const { sendJsonMessage } = useWebSocket(API_ENDPOINT, {
@@ -50,6 +66,9 @@ function App() {
           ...prev.slice(0, -1),
           { ...prev[prev.length - 1], message: prev[prev.length - 1].message + message.data },
         ]);
+      } else if (message.end) {
+        setLoading(false);
+        saveHistoryEvent(messages);
       } else if (!message.error) {
         setLoading(false);
       }
@@ -66,11 +85,12 @@ function App() {
     }
     setLoading(true);
     const currentPrompt = prompt;
+    const id =  uuidv4();
 
     setMessages((prev) => [
       ...prev,
-      { is_input: true, message: currentPrompt },
-      { is_input: false, message: '' },
+      { is_input: true, role: 'user', messageId: id, message: currentPrompt, rating: null },
+      { is_input: false, role: 'assistant', messageId: id, message: '', rating: null },
     ]);
 
     sendJsonMessage({
@@ -80,6 +100,37 @@ function App() {
     });
 
     updatePrompt('');
+  };
+
+  const handleRateClick = async (rating: string, messageId: string) => {
+    sendJsonMessage({
+      action: 'rate', 
+      data: { rating: rating, messageId: messageId },
+      token: (await Auth.currentSession()).getIdToken().getJwtToken(),
+    });
+    setMessages((prev) => [
+      ...prev.slice(0, -1),
+      { ...prev[prev.length - 1], rating: rating },
+    ]);
+  };
+  
+  const handleResetClick = async () => {
+    sendJsonMessage({
+      action: 'reset', 
+      token: (await Auth.currentSession()).getIdToken().getJwtToken(),
+    });
+    setMessages([]);
+  };
+  
+  const saveHistoryEvent = async (messages: Message[]) => {
+    console.log('Saving history');
+    const lastTwoMessages = messages.slice(-2);
+    const messageId = lastTwoMessages[0].messageId
+    sendJsonMessage({
+      action: 'history', 
+      data: { messageId: messageId, messages: lastTwoMessages },
+      token: (await Auth.currentSession()).getIdToken().getJwtToken(),
+    });
   };
 
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -112,15 +163,25 @@ function App() {
                   <ReactMarkdown>{message.message}</ReactMarkdown>
                 </UserMessage>
               ) : (
-                <AssistantMessage isEmpty={message.message === ''}>
-                  <ReactMarkdown>{message.message}</ReactMarkdown>
-                </AssistantMessage>
+                <AssistantMessageGroup>
+                  <AssistantMessage>
+                    <ReactMarkdown>{message.message}</ReactMarkdown>
+                    { message?.rating === 'up' ?  ("👍") : (message?.rating === 'down' ? ("👎") : (<></>)) }
+                  </AssistantMessage>
+                  {!loading && message.rating == null ? (
+                  <ButtonGroup>
+                    <ThumbsUp onClick={() => handleRateClick('up', message.messageId)}>👍</ThumbsUp>
+                    <ThumbsDown onClick={() => handleRateClick('down', message.messageId)}>👎</ThumbsDown>
+                  </ButtonGroup>
+                  ) : (<></>)}
+              </AssistantMessageGroup>
               )}
             </MessageGroup>
           ))}
         </MessageList>
         <InputContainer>
           <InputField
+            id="input"
             ref={inputRef}
             placeholder="Type your message..."
             value={prompt}
@@ -132,6 +193,11 @@ function App() {
             }}
           />
         </InputContainer>
+        {!loading ? (
+        <ButtonGroup>
+          <TrashButton onClick={handleResetClick}>🗑️</TrashButton>
+        </ButtonGroup>
+        ) : (<></>)}
       </ChatContainer>
     </AppContainer>
   );
