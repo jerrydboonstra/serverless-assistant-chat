@@ -95,111 +95,6 @@ async function saveThreadId(userId: string, threadId: string): Promise<void> {
   await dynamoDbClient.send(command);
 }
 
-async function updateRatingInDynamoDB(messageId: string, rating: string): Promise<void> {
-  const params = {
-    TableName: 'conversationhistory',
-    Key: {
-      id: { S: messageId },
-    },
-    ExpressionAttributeValues: {
-      ":inc": { N: rating === "up" ? "1" : "-1" },
-      ":zero": { N: "0" }
-    },
-    UpdateExpression: "SET rating = if_not_exists(rating, :zero) + :inc"
-  };
-
-  const command = new UpdateItemCommand(params);
-  await dynamoDbClient.send(command);
-}
-
-
-async function resetUserThreadInDynamoDB(userId: string): Promise<void> {
-  const params = {
-    TableName: 'AssistantThreadTable',
-    Key: {
-      userId: { S: userId },
-    }
-  };
-
-  const command = new DeleteItemCommand(params);
-  await dynamoDbClient.send(command);
-}
-
-async function saveConversationHistoryInDynamoDB(messageId: string, messages: {role: string, message: string}[]): Promise<void> {
-  const params = {
-    TableName: 'conversationhistory',
-    Item: {
-      id: { S: messageId },
-      messages: { L: messages.map(m => ({ M: { role: { S: m.role }, message: { S: m.message } }})) }
-    },
-  };
-
-  await dynamoDbClient.send(new PutItemCommand(params));
-}
-
-async function authorizeAndExtractUserId(token: string): Promise<string | null> {
-  const isAuthorized = await authorize(token);
-  if (!isAuthorized) {
-    console.log('Not Authorized');
-    return null;
-  }
-
-  console.log('Authorized');
-  const decodedToken = decodeToken(token);
-  const userId = decodedToken.payload['sub'];
-  console.log({ userId });
-  return userId;
-}
-
-async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI): Promise<string> {
-  let threadId = await getThreadId(userId);
-  if (!threadId) {
-    const messages: ThreadCreateParams.Message[] = [{ role: 'user', content: prompt }];
-    const thread = await openai.beta.threads.create({ messages: messages.length > 0 ? messages : [{ role: 'user', content: 'hello.' }] });
-    threadId = thread.id;
-    await saveThreadId(userId, threadId);
-  } else {
-    const messages: MessageCreateParams = { role: 'user', content: prompt };
-    await openai.beta.threads.messages.create(threadId, messages);
-  }
-  return threadId;
-}
-
-async function getOpenAiApiKey(): Promise<string | undefined> {
-  const client = new SecretsManagerClient({ region });
-  try {
-    const response = await client.send(new GetSecretValueCommand({ SecretId: secretName }));
-    return response.SecretString;
-  } catch (error) {
-    console.log("Error getting OpenAI API key from Secrets Manager:", error);
-    throw error;
-  }
-}
-
-// Queue for managing tokens
-let tokenQueue: string[] = [];
-let isProcessing = false;
-
-async function processQueue(connectionId: string) {
-  if (isProcessing) return;
-  isProcessing = true;
-  
-  while (tokenQueue.length > 0) {
-    const token = tokenQueue.shift();
-    if (token !== undefined) {
-      await apiGwManApiClient.send(new PostToConnectionCommand({ ConnectionId: connectionId, Data: JSON.stringify({ data: token }) }));
-    }
-  }
-  
-  isProcessing = false;
-}
-
-interface ICallbackHandler {
-  handleLLMNewToken(token: string): void;
-  handleLLMEnd(): void;
-}
-
-
 const handler: Handler = async (event, context) => {
   console.log('EVENT: \n' + JSON.stringify(event, null, 2));
   const connectionId = event.requestContext.connectionId;
@@ -291,6 +186,110 @@ const handler: Handler = async (event, context) => {
     body: '{}',
   };
 };
+
+async function updateRatingInDynamoDB(messageId: string, rating: string): Promise<void> {
+  const params = {
+    TableName: 'conversationhistory',
+    Key: {
+      id: { S: messageId },
+    },
+    ExpressionAttributeValues: {
+      ":inc": { N: rating === "up" ? "1" : "-1" },
+      ":zero": { N: "0" }
+    },
+    UpdateExpression: "SET rating = if_not_exists(rating, :zero) + :inc"
+  };
+
+  const command = new UpdateItemCommand(params);
+  await dynamoDbClient.send(command);
+}
+
+
+async function resetUserThreadInDynamoDB(userId: string): Promise<void> {
+  const params = {
+    TableName: 'AssistantThreadTable',
+    Key: {
+      userId: { S: userId },
+    }
+  };
+
+  const command = new DeleteItemCommand(params);
+  await dynamoDbClient.send(command);
+}
+
+async function saveConversationHistoryInDynamoDB(messageId: string, messages: {role: string, message: string}[]): Promise<void> {
+  const params = {
+    TableName: 'conversationhistory',
+    Item: {
+      id: { S: messageId },
+      messages: { L: messages.map(m => ({ M: { role: { S: m.role }, message: { S: m.message } }})) }
+    },
+  };
+
+  await dynamoDbClient.send(new PutItemCommand(params));
+}
+
+async function authorizeAndExtractUserId(token: string): Promise<string | null> {
+  const isAuthorized = await authorize(token);
+  if (!isAuthorized) {
+    console.log('Not Authorized');
+    return null;
+  }
+
+  console.log('Authorized');
+  const decodedToken = decodeToken(token);
+  const userId = decodedToken.payload['sub'];
+  console.log({ userId });
+  return userId;
+}
+
+async function findOrCreateThread(userId: string, prompt: string, openai: OpenAI): Promise<string> {
+  let threadId = await getThreadId(userId);
+  if (!threadId) {
+    const messages: ThreadCreateParams.Message[] = [{ role: 'user', content: prompt }];
+    const thread = await openai.beta.threads.create({ messages: messages.length > 0 ? messages : [{ role: 'user', content: 'hello.' }] });
+    threadId = thread.id;
+    await saveThreadId(userId, threadId);
+  } else {
+    const messages: MessageCreateParams = { role: 'user', content: prompt };
+    await openai.beta.threads.messages.create(threadId, messages);
+  }
+  return threadId;
+}
+
+async function getOpenAiApiKey(): Promise<string | undefined> {
+  const client = new SecretsManagerClient({ region });
+  try {
+    const response = await client.send(new GetSecretValueCommand({ SecretId: secretName }));
+    return response.SecretString;
+  } catch (error) {
+    console.log("Error getting OpenAI API key from Secrets Manager:", error);
+    throw error;
+  }
+}
+
+interface ICallbackHandler {
+  handleLLMNewToken(token: string): void;
+  handleLLMEnd(): void;
+}
+
+// Queue for managing tokens
+let tokenQueue: string[] = [];
+let isProcessing = false;
+
+async function processQueue(connectionId: string) {
+  if (isProcessing) return;
+  isProcessing = true;
+  
+  while (tokenQueue.length > 0) {
+    const token = tokenQueue.shift();
+    if (token !== undefined) {
+      await apiGwManApiClient.send(new PostToConnectionCommand({ ConnectionId: connectionId, Data: JSON.stringify({ data: token }) }));
+    }
+  }
+  
+  isProcessing = false;
+}
 
 async function main(userId: string, prompt: string, connectionId: string) {
   const callbackHandler: ICallbackHandler = {
