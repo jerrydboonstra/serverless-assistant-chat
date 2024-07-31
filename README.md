@@ -40,7 +40,7 @@ ASSISTANT_ID=
 # FRONTEND
 USER_POOL_ID=
 USER_POOL_WEB_CLIENT_ID=
-API_ENDPOINT=
+API_ENDPOINT=wss://xxxxxxxx.execute-api.us-east-1.amazonaws.com/dev
 DOMAIN_NAME=
 DISTRIBUTION_ID=
 ```
