@@ -133,21 +133,18 @@ destroy-frontend-bucket:
 query-user-thread:
 	@aws dynamodb get-item \
 		--table-name AssistantThreadTable \
-		--key '{"userId": {"S": "${USER_ID}"}}' \
-		--no-cli-pager
+		--key '{"userId": {"S": "${USER_ID}"}}'
 
 query-user-thread-id:
 	@aws dynamodb get-item \
 		--table-name AssistantThreadTable \
 		--key '{"userId": {"S": "${USER_ID}"}}' \
-		--no-cli-pager | jq -r '.Item.threadId.S'
+		| jq -r '.Item.threadId.S'
 
 query-threads:
 	@aws dynamodb scan \
-		--table-name AssistantThreadTable \
-		--no-cli-pager
+		--table-name AssistantThreadTable
 
 query-history:
 	@aws dynamodb scan \
-		--table-name conversationhistory \
-		--no-cli-pager
+		--table-name conversationhistory
