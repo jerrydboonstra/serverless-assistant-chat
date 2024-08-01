@@ -2,3 +2,4 @@ boto3
 fastjsonschema
 openai>=1.23.6
 pyyaml
+pytest

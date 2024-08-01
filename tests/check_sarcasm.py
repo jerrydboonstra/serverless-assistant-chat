@@ -4,9 +4,8 @@ from openai import OpenAI
 from openai.types import Completion
 
 api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key)
 
-def detect_sarcasm(text):
+def detect_sarcasm(client=None, text=None):
     try:
         resp: Completion = client.completions.create(
             model="gpt-3.5-turbo-instruct",
@@ -22,7 +21,8 @@ def detect_sarcasm(text):
         return f"An error occurred: {str(e)}"
 
 def main(text):
-    result = detect_sarcasm(text)
+    client = OpenAI(api_key=api_key)
+    result = detect_sarcasm(text=text, client=client)
     print(result)
 
 if __name__ == "__main__":

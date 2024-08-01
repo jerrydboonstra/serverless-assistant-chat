@@ -148,3 +148,6 @@ query-threads:
 query-history:
 	@aws dynamodb scan \
 		--table-name conversationhistory
+
+test:
+	pytest
