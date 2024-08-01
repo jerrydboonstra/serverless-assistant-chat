@@ -12,3 +12,4 @@ openai-layer.zip
 admin/my_assistant.yml
 layer/node_modules/
 layer/nodejs/
+__pycache__/
